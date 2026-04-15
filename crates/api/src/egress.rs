@@ -122,7 +122,6 @@ impl EgressManager {
             let stdin = child.stdin.take()
                 .ok_or_else(|| format!("failed to get stdin for {}", dest.name))?;
 
-            // Log ffmpeg stderr
             let stderr = child.stderr.take();
             let log_name = dest.name.clone();
             if let Some(stderr) = stderr {
@@ -146,7 +145,6 @@ impl EgressManager {
                 let mut stdin = stdin;
                 let mut bytes_written: u64 = 0;
 
-                // Send FLV header
                 let header = flv::flv_header();
                 if let Err(e) = stdin.write_all(&header).await {
                     tracing::error!("egress header write failed for {}: {}", dest_name, e);
@@ -154,7 +152,6 @@ impl EgressManager {
                 }
                 bytes_written += header.len() as u64;
 
-                // Send cached sequence headers so FFmpeg can decode immediately
                 if let Some(ref seq) = seq_headers {
                     if let Some(ref video) = seq.video {
                         let _ = stdin.write_all(video).await;

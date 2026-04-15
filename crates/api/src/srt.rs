@@ -125,14 +125,12 @@ pub async fn start_srt_listener(
         listeners.insert(source_id, child);
     }
 
-    // Mark as connecting (waiting for encoder)
     state.source_states.write().await.insert(source_id, muxshed_common::SourceState::Connecting);
     let _ = state.ws_tx.send(muxshed_common::WsEvent::SourceState {
         id: source_id,
         state: muxshed_common::SourceState::Connecting,
     });
 
-    // Read normalized FLV from stdout and feed into relay
     let state_clone = state.clone();
     tokio::spawn(async move {
         read_flv_output(source_id, stdout, public_tx, state_clone).await;
@@ -147,7 +145,6 @@ async fn read_flv_output(
     public_tx: tokio::sync::broadcast::Sender<Bytes>,
     state: Arc<AppState>,
 ) {
-    // Read and discard FLV header (13 bytes)
     let mut header = [0u8; 13];
     if stdout.read_exact(&mut header).await.is_err() {
         tracing::warn!("srt: failed to read FLV header for {}", source_id);
@@ -184,7 +181,6 @@ async fn read_flv_output(
         tag_buf.extend_from_slice(&prev_size);
         let tag = Bytes::from(tag_buf);
 
-        // Cache sequence headers
         if tag_type == 9 && !data.is_empty() {
             let avc_packet_type = if data.len() > 1 { data[1] } else { 255 };
             let frame_type = (data[0] >> 4) & 0x0F;
@@ -205,7 +201,6 @@ async fn read_flv_output(
             }
         }
 
-        // Mark live on first frame
         if frame_count == 0 {
             state.source_states.write().await.insert(source_id, muxshed_common::SourceState::Live);
             let _ = state.ws_tx.send(muxshed_common::WsEvent::SourceState {
@@ -242,7 +237,6 @@ pub async fn assign_srt_port(state: &AppState) -> u16 {
     let used_ports: std::collections::HashSet<u16> = listeners.keys().map(|_| 0u16).collect();
     drop(listeners);
 
-    // Check which ports are actually in use by querying existing SRT sources
     let rows: Vec<(String,)> = sqlx::query_as("SELECT kind FROM sources WHERE kind LIKE '%\"srt\"%'")
         .fetch_all(&state.db)
         .await

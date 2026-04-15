@@ -22,7 +22,6 @@ pub async fn start(
         return Err(MuxshedError::BadRequest("pipeline is not idle".to_string()).into());
     }
 
-    // Load broadcast config from DB
     let saved_config: BroadcastConfig = sqlx::query_as::<_, (String,)>(
         "SELECT value FROM settings WHERE key = 'broadcast_config'",
     )
@@ -107,12 +106,10 @@ pub async fn start(
 
     tracing::info!("going live: source={}, destinations={}", source_id, destinations.len());
 
-    // Verify source is actually streaming
     if state.get_media_relay(&source_id).await.is_none() {
         return Err(MuxshedError::BadRequest("source is not streaming".to_string()).into());
     }
 
-    // Configure delay if set in broadcast config
     if saved_config.enable_delay {
         let delay = muxshed_common::DelayConfig {
             enabled: true,
@@ -122,7 +119,6 @@ pub async fn start(
         let _ = state.pipeline.set_delay(&delay).await;
     }
 
-    // Load output config for transcoding
     let output_config: Option<crate::routes::output::OutputConfig> =
         sqlx::query_as::<_, (String,)>("SELECT value FROM settings WHERE key = 'output_config'")
             .fetch_optional(&state.db)
@@ -131,7 +127,6 @@ pub async fn start(
             .flatten()
             .and_then(|(json,)| serde_json::from_str(&json).ok());
 
-    // Get cached sequence headers for the source so egress can decode immediately
     let seq_headers = {
         let headers = state.sequence_headers.read().await;
         headers.get(&source_id).cloned()
@@ -150,7 +145,6 @@ pub async fn start(
     let _ = state.program_source.send(Some(source_id));
     tracing::info!("program source set to {}", source_id);
 
-    // Start recording if auto_record is enabled
     if saved_config.auto_record {
         let config = state.config.read().await;
         let path = config.data_dir.join("recordings").join(format!(
@@ -160,10 +154,8 @@ pub async fn start(
         let _ = state.pipeline.start_recording(&path).await;
     }
 
-    // Update pipeline state
     state.pipeline.start(destinations).await?;
 
-    // Activate initial scene if configured
     if let Some(scene_id) = saved_config.scene_id {
         let _ = state.pipeline.activate_scene(&scene_id).await;
     }

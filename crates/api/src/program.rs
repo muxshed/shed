@@ -64,7 +64,6 @@ pub async fn run_program_router(state: Arc<AppState>) {
     let mut output_ts: u32 = 0;
 
     loop {
-        // Wait for a video source
         let current_source_id = loop {
             let current = source_rx.borrow_and_update().clone();
             if let Some(id) = current {
@@ -89,7 +88,6 @@ pub async fn run_program_router(state: Arc<AppState>) {
             current_source_id, audio_source_id, same_source
         );
 
-        // Send sequence headers for initial source
         send_sequence_headers(&state, &current_source_id, &audio_source_id, output_ts).await;
 
         let video_relay = state.get_media_relay(&current_source_id).await;

@@ -6,6 +6,8 @@ One stream in, or many. Every destination, simultaneously. No cloud middleman, n
 
 The open source, self-hosted alternative to Restream, StreamYard, and vMix.
 
+<img src=".github/images/studio_screenshot.png" alt="Muxshed Studio" width="400" />
+
 ## Inspiration
 
 This started years ago as a passion project to understand the complexities of muxing live video automatically. It was recently brought back to life earlier 2026 using Rust for a lot of the application compontents. 

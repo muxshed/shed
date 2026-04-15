@@ -114,7 +114,6 @@ pub async fn start_media_playback(
         .take()
         .ok_or("failed to capture ffmpeg stdout")?;
 
-    // Log stderr
     if let Some(stderr) = child.stderr.take() {
         let sid = source_id;
         tokio::spawn(async move {
@@ -131,7 +130,6 @@ pub async fn start_media_playback(
         });
     }
 
-    // Store the child process handle so we can stop it later
     {
         let mut players = state.media_players.write().await;
         if let Some(mut old) = players.remove(&source_id) {
@@ -140,7 +138,6 @@ pub async fn start_media_playback(
         players.insert(source_id, child);
     }
 
-    // Read FLV output and feed into relay
     let state_clone = state.clone();
     tokio::spawn(async move {
         feed_relay(source_id, stdout, relay_tx, state_clone).await;
@@ -155,18 +152,15 @@ async fn feed_relay(
     relay_tx: broadcast::Sender<Bytes>,
     state: Arc<AppState>,
 ) {
-    // Read FLV header (9 bytes + 4 bytes previous tag size)
     let mut header = [0u8; 13];
     if stdout.read_exact(&mut header).await.is_err() {
         tracing::warn!("failed to read FLV header for media source {}", source_id);
         return;
     }
 
-    // Cache sequence headers as we encounter them
     let mut frame_count: u64 = 0;
 
     loop {
-        // Read tag header (11 bytes)
         let mut tag_header = [0u8; 11];
         match stdout.read_exact(&mut tag_header).await {
             Ok(_) => {}
@@ -181,19 +175,16 @@ async fn feed_relay(
             | ((tag_header[2] as u32) << 8)
             | (tag_header[3] as u32);
 
-        // Read tag data
         let mut data = vec![0u8; data_size as usize];
         if stdout.read_exact(&mut data).await.is_err() {
             break;
         }
 
-        // Read previous tag size (4 bytes)
         let mut prev_size = [0u8; 4];
         if stdout.read_exact(&mut prev_size).await.is_err() {
             break;
         }
 
-        // Build complete FLV tag (header + data + prev_tag_size)
         let total_size = 11 + data_size as usize + 4;
         let mut tag_buf = Vec::with_capacity(total_size);
         tag_buf.extend_from_slice(&tag_header);
@@ -201,20 +192,17 @@ async fn feed_relay(
         tag_buf.extend_from_slice(&prev_size);
         let tag = Bytes::from(tag_buf);
 
-        // Cache sequence headers for late-joining preview clients
         if tag_type == 9 && !data.is_empty() {
             let frame_type = (data[0] >> 4) & 0x0F;
             let avc_packet_type = if data.len() > 1 { data[1] } else { 255 };
 
             if avc_packet_type == 0 {
-                // Video sequence header (SPS/PPS)
                 let mut headers = state.sequence_headers.write().await;
                 let entry = headers
                     .entry(source_id)
                     .or_insert_with(crate::state::SequenceHeaders::default);
                 entry.video = Some(tag.clone());
             } else if frame_type == 1 {
-                // Keyframe
                 let mut headers = state.sequence_headers.write().await;
                 if let Some(entry) = headers.get_mut(&source_id) {
                     entry.last_keyframe = Some(tag.clone());
@@ -223,7 +211,6 @@ async fn feed_relay(
         } else if tag_type == 8 && !data.is_empty() {
             let aac_packet_type = if data.len() > 1 { data[1] } else { 255 };
             if aac_packet_type == 0 {
-                // Audio sequence header
                 let mut headers = state.sequence_headers.write().await;
                 let entry = headers
                     .entry(source_id)
@@ -232,7 +219,6 @@ async fn feed_relay(
             }
         }
 
-        // Send to relay (ignore errors -- no subscribers is fine)
         let _ = relay_tx.send(tag);
 
         frame_count += 1;
@@ -241,7 +227,6 @@ async fn feed_relay(
         }
     }
 
-    // Cleanup
     {
         let mut players = state.media_players.write().await;
         players.remove(&source_id);

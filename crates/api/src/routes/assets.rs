@@ -71,8 +71,6 @@ pub struct UpdateFolder {
     pub color: Option<String>,
 }
 
-// --- Assets ---
-
 pub async fn list_assets(
     State(state): State<Arc<AppState>>,
     Query(params): Query<HashMap<String, String>>,
@@ -322,8 +320,6 @@ pub async fn upload_asset(
     Ok((StatusCode::CREATED, Json(row.into_asset())))
 }
 
-// --- Folders ---
-
 pub async fn list_folders(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Folder>>, ApiError> {
@@ -408,8 +404,6 @@ pub async fn delete_folder(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// --- Serve asset files ---
-
 pub async fn serve_file(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -456,8 +450,6 @@ pub async fn serve_thumbnail(
         .body(axum::body::Body::from(data))
         .unwrap())
 }
-
-// --- Row types ---
 
 #[derive(sqlx::FromRow)]
 struct AssetRow {

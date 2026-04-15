@@ -312,7 +312,6 @@ impl PipelineController for GstPipelineController {
                 state: state.clone(),
             });
         }
-        // TODO: switch input-selector active pad based on scene layers
         Ok(())
     }
 
@@ -409,13 +408,11 @@ impl PipelineController for GstPipelineController {
     }
 
     async fn set_delay(&self, config: &DelayConfig) -> Result<(), MuxshedError> {
-        // TODO: configure GStreamer queue max-size-time for delay buffer
         tracing::info!("gst: set_delay enabled={} duration={}ms", config.enabled, config.duration_ms);
         Ok(())
     }
 
     async fn trigger_bleep(&self) -> Result<(), MuxshedError> {
-        // TODO: set volume element to zero + mix 1kHz tone for 1 second
         let _ = self.ws_tx.send(WsEvent::BleepTriggered {
             at_ms: 0,
             source: "manual".to_string(),
@@ -432,7 +429,6 @@ impl PipelineController for GstPipelineController {
             stinger_id: *stinger_id,
             target_scene_id: *target_scene_id,
         });
-        // TODO: load stinger into overlay pad, wait for opaque point, switch source, wait for clear
         let ws_tx = self.ws_tx.clone();
         let state = self.state.clone();
         let scene_id = *target_scene_id;

@@ -61,18 +61,11 @@ export interface Scene {
 	layers: Layer[];
 }
 
-export type OverlayKind =
-	| { type: 'image'; file_path: string }
-	| { type: 'lower_third'; title: string; subtitle: string; background_color: string; text_color: string };
-
-export interface Overlay {
+export interface User {
 	id: string;
-	name: string;
-	kind: OverlayKind;
-	position: { x: number; y: number };
-	size: { width: number; height: number };
-	visible: boolean;
-	z_index: number;
+	username: string;
+	role: 'admin' | 'write' | 'read';
+	created_at: string;
 }
 
 export interface RecordingState {

@@ -12,7 +12,6 @@ mod destinations;
 mod guests;
 mod keys;
 pub mod output;
-mod overlays;
 mod recording;
 mod scenes;
 mod setup;
@@ -92,14 +91,6 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         )
         .route("/destinations/{id}/enable", post(destinations::enable))
         .route("/destinations/{id}/disable", post(destinations::disable))
-        // Overlays
-        .route("/overlays", get(overlays::list).post(overlays::create))
-        .route(
-            "/overlays/{id}",
-            put(overlays::update).delete(overlays::delete),
-        )
-        .route("/overlays/{id}/show", post(overlays::show))
-        .route("/overlays/{id}/hide", post(overlays::hide))
         // Delay / Bleep
         .route("/delay", get(delay::get_delay).put(delay::update_delay))
         .route("/delay/enable", post(delay::enable))
@@ -139,6 +130,10 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         // Auth-protected user routes
         .route("/auth/me", get(auth::me))
         .route("/auth/logout", post(auth::logout))
+        .route("/auth/change-password", post(auth::change_password))
+        // User management
+        .route("/users", get(auth::list_users).post(auth::create_user))
+        .route("/users/{id}", put(auth::update_user).delete(auth::delete_user))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,

@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, Overlay, OverlayKind, RecordingState, StingerConfig, StingerAudio, DelayConfig, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder } from './types';
+import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, RecordingState, StingerConfig, StingerAudio, DelayConfig, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User } from './types';
 
 function getSessionToken(): string {
 	if (typeof window === 'undefined') return '';
@@ -79,6 +79,25 @@ export const api = {
 		});
 	},
 	me: () => request<{ id: string; username: string; role: string }>('/auth/me'),
+	changePassword: (currentPassword: string, newPassword: string) =>
+		request<void>('/auth/change-password', {
+			method: 'POST',
+			body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+		}),
+
+	// Users
+	listUsers: () => request<User[]>('/users'),
+	createUser: (username: string, password: string, role: string) =>
+		request<User>('/users', {
+			method: 'POST',
+			body: JSON.stringify({ username, password, role }),
+		}),
+	updateUser: (id: string, data: { username?: string; password?: string; role?: string }) =>
+		request<User>(`/users/${id}`, {
+			method: 'PUT',
+			body: JSON.stringify(data),
+		}),
+	deleteUser: (id: string) => request<void>(`/users/${id}`, { method: 'DELETE' }),
 
 	// Sources
 	listSources: () => request<Source[]>('/sources'),
@@ -178,22 +197,6 @@ export const api = {
 		}),
 	deleteLayer: (sceneId: string, layerId: string) =>
 		request<void>(`/scenes/${sceneId}/layers/${layerId}`, { method: 'DELETE' }),
-
-	// Overlays
-	listOverlays: () => request<Overlay[]>('/overlays'),
-	createOverlay: (name: string, kind: OverlayKind, opts?: { x?: number; y?: number; width?: number; height?: number; z_index?: number }) =>
-		request<Overlay>('/overlays', {
-			method: 'POST',
-			body: JSON.stringify({ name, kind, ...opts }),
-		}),
-	updateOverlay: (id: string, data: { name?: string; x?: number; y?: number; width?: number; height?: number; visible?: boolean; z_index?: number }) =>
-		request<Overlay>(`/overlays/${id}`, {
-			method: 'PUT',
-			body: JSON.stringify(data),
-		}),
-	deleteOverlay: (id: string) => request<void>(`/overlays/${id}`, { method: 'DELETE' }),
-	showOverlay: (id: string) => request<void>(`/overlays/${id}/show`, { method: 'POST' }),
-	hideOverlay: (id: string) => request<void>(`/overlays/${id}/hide`, { method: 'POST' }),
 
 	// Recording
 	startRecording: () => request<void>('/record/start', { method: 'POST' }),

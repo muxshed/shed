@@ -28,11 +28,9 @@ pub async fn start_normalizer(
 ) -> Result<broadcast::Sender<Bytes>, String> {
     let cfg = load_output_config(&state).await;
 
-    // Raw relay: RTMP ingest writes raw FLV tags here
     let (raw_tx, _) = broadcast::channel::<Bytes>(4096);
     let raw_tx_clone = raw_tx.clone();
 
-    // Public relay: normalized FLV goes here (what preview/program reads)
     let public_tx = state.get_or_create_media_relay(source_id).await;
 
     let vf = format!(
@@ -86,7 +84,6 @@ pub async fn start_normalizer(
     let stdin = child.stdin.take().ok_or("no stdin")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
 
-    // Log stderr
     if let Some(stderr) = child.stderr.take() {
         let sid = source_id;
         tokio::spawn(async move {
@@ -103,7 +100,6 @@ pub async fn start_normalizer(
         });
     }
 
-    // Store child so we can kill it on disconnect
     {
         let mut normalizers = state.source_normalizers.write().await;
         if let Some(mut old) = normalizers.remove(&source_id) {
@@ -112,11 +108,9 @@ pub async fn start_normalizer(
         normalizers.insert(source_id, child);
     }
 
-    // Writer task: reads from raw_tx and writes to FFmpeg stdin
     let mut raw_rx = raw_tx.subscribe();
     tokio::spawn(async move {
         let mut stdin = stdin;
-        // Write FLV header to FFmpeg
         let header = crate::rtmp::flv::flv_header();
         if stdin.write_all(&header).await.is_err() {
             return;
@@ -139,8 +133,6 @@ pub async fn start_normalizer(
         }
     });
 
-    // Reader task: reads normalized FLV from FFmpeg stdout, parses tags,
-    // feeds into public media relay with proper sequence header caching
     let state_clone = state.clone();
     tokio::spawn(async move {
         read_normalized_output(source_id, stdout, public_tx, state_clone).await;
@@ -155,7 +147,6 @@ async fn read_normalized_output(
     public_tx: broadcast::Sender<Bytes>,
     state: Arc<AppState>,
 ) {
-    // Read and discard FLV header (13 bytes)
     let mut header = [0u8; 13];
     if stdout.read_exact(&mut header).await.is_err() {
         tracing::warn!("normalizer: failed to read FLV header for {}", source_id);
@@ -165,7 +156,6 @@ async fn read_normalized_output(
     let mut frame_count: u64 = 0;
 
     loop {
-        // Read tag header (11 bytes)
         let mut tag_header = [0u8; 11];
         if stdout.read_exact(&mut tag_header).await.is_err() {
             break;
@@ -176,19 +166,16 @@ async fn read_normalized_output(
             | ((tag_header[2] as u32) << 8)
             | (tag_header[3] as u32);
 
-        // Read tag data
         let mut data = vec![0u8; data_size as usize];
         if stdout.read_exact(&mut data).await.is_err() {
             break;
         }
 
-        // Read previous tag size (4 bytes)
         let mut prev_size = [0u8; 4];
         if stdout.read_exact(&mut prev_size).await.is_err() {
             break;
         }
 
-        // Build complete tag
         let total = 11 + data_size as usize + 4;
         let mut tag_buf = Vec::with_capacity(total);
         tag_buf.extend_from_slice(&tag_header);
@@ -196,7 +183,6 @@ async fn read_normalized_output(
         tag_buf.extend_from_slice(&prev_size);
         let tag = Bytes::from(tag_buf);
 
-        // Cache sequence headers for the normalized output
         if tag_type == 9 && !data.is_empty() {
             let avc_packet_type = if data.len() > 1 { data[1] } else { 255 };
             let frame_type = (data[0] >> 4) & 0x0F;
@@ -229,7 +215,6 @@ async fn read_normalized_output(
     }
 
     tracing::info!("normalizer: ended for {} after {} frames", source_id, frame_count);
-    // Cleanup
     let mut normalizers = state.source_normalizers.write().await;
     normalizers.remove(&source_id);
 }

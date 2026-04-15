@@ -44,7 +44,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (ws_tx, _) = broadcast::channel::<WsEvent>(256);
     let (program_tx, _) = broadcast::channel::<bytes::Bytes>(4096);
     let (program_source_tx, _program_source_rx) = watch::channel::<Option<uuid::Uuid>>(None);
-    // Restore saved audio routing
     let saved_audio_routing: muxshed_api::state::AudioRouting = sqlx::query_as::<_, (String,)>(
         "SELECT value FROM settings WHERE key = 'audio_routing'",
     )
@@ -76,7 +75,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         audio_routing: audio_routing_tx,
     });
 
-    // Set media file sources as Live on startup and start their playback
     {
         let rows = sqlx::query_as::<_, (String, String)>("SELECT id, kind FROM sources")
             .fetch_all(&state.db)
@@ -119,13 +117,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Start program router (forwards active source to program output)
     let program_state = state.clone();
     tokio::spawn(async move {
         run_program_router(program_state).await;
     });
 
-    // Start RTMP ingest server
     let rtmp_state = state.clone();
     let rtmp_port = config.rtmp_port;
     tokio::spawn(async move {

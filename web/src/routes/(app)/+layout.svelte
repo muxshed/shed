@@ -130,7 +130,6 @@
 		{ href: '/sources', label: 'Sources' },
 		{ href: '/library', label: 'Library' },
 		{ href: '/destinations', label: 'Destinations' },
-		{ href: '/overlays', label: 'Overlays' },
 		{ href: '/settings', label: 'Settings' },
 	];
 

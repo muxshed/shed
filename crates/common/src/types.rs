@@ -149,28 +149,6 @@ pub enum ApiScope {
     Admin,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Overlay {
-    pub id: Uuid,
-    pub name: String,
-    pub kind: OverlayKind,
-    pub position: Position,
-    pub size: Size,
-    pub visible: bool,
-    pub z_index: u32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum OverlayKind {
-    Image { file_path: PathBuf },
-    LowerThird {
-        title: String,
-        subtitle: String,
-        background_color: String,
-        text_color: String,
-    },
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordingState {
