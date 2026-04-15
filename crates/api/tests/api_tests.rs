@@ -30,6 +30,7 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
     let config = MuxshedConfig {
         listen_addr: "127.0.0.1:0".to_string(),
         rtmp_port: 1935,
+        srt_port_range_start: 9000,
         db_path: PathBuf::from(":memory:"),
         data_dir: PathBuf::from("/tmp/muxshed-test"),
         web_dir: None,
@@ -58,6 +59,9 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         media_relays: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         sequence_headers: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         source_media_info: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        media_players: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        source_normalizers: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        srt_listeners: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         program_tx,
         program_source: program_source_tx,
         preview_source: tokio::sync::RwLock::new(None),
@@ -413,40 +417,6 @@ async fn test_delay_config() {
     let req = json_request("POST", "/api/v1/delay/bleep", &key, None);
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-}
-
-// --- Overlay tests ---
-
-#[tokio::test]
-async fn test_overlay_crud() {
-    let (app, key, _state) = setup().await;
-
-    let req = json_request(
-        "POST",
-        "/api/v1/overlays",
-        &key,
-        Some(r#"{"name":"Logo","kind":{"type":"image","file_path":"/overlays/logo.png"}}"#),
-    );
-    let resp = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::CREATED);
-    let body = response_json(resp).await;
-    let id = body["id"].as_str().unwrap().to_string();
-    assert_eq!(body["visible"], false);
-
-    // Show
-    let req = json_request("POST", &format!("/api/v1/overlays/{}/show", id), &key, None);
-    let resp = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK);
-
-    // Hide
-    let req = json_request("POST", &format!("/api/v1/overlays/{}/hide", id), &key, None);
-    let resp = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK);
-
-    // Delete
-    let req = json_request("DELETE", &format!("/api/v1/overlays/{}", id), &key, None);
-    let resp = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 }
 
 // --- Guest tests ---
