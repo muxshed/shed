@@ -1,0 +1,22 @@
+[package]
+name = "muxshed-processor"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+[features]
+default = []
+gstreamer = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
+
+[dependencies]
+muxshed-common = { path = "../common" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+gstreamer = { version = "0.23", optional = true }
+gstreamer-app = { version = "0.23", optional = true }
+gstreamer-video = { version = "0.23", optional = true }

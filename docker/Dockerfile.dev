@@ -1,0 +1,47 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+# Dev image — no GStreamer, uses stub pipeline controller.
+
+# --- Rust builder ---
+FROM rust:1.84-slim AS rust-builder
+
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY Cargo.toml Cargo.toml
+COPY crates/ crates/
+COPY migrations/ migrations/
+
+RUN cargo build --release
+
+# --- Web builder ---
+FROM node:24-slim AS web-builder
+
+WORKDIR /build
+COPY web/package.json web/package-lock.json* ./
+RUN npm ci
+COPY web/ .
+RUN npm run build
+
+# --- Runtime ---
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+
+COPY --from=rust-builder /build/target/release/muxshed-api /usr/local/bin/
+COPY --from=web-builder /build/build /app/web
+
+ENV MUXSHED_DB_PATH=/config/muxshed.db
+ENV MUXSHED_DATA_DIR=/config
+ENV MUXSHED_WEB_DIR=/app/web
+ENV MUXSHED_LISTEN_ADDR=0.0.0.0:8080
+ENV MUXSHED_LOG_LEVEL=debug
+ENV RUST_LOG=debug
+
+EXPOSE 8080
+
+VOLUME /config
+
+CMD ["/usr/local/bin/muxshed-api"]

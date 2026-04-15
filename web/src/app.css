@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+
+:root {
+	--color-bg: #0f0f0f;
+	--color-surface: #1a1a1a;
+	--color-surface-hover: #252525;
+	--color-border: #333;
+	--color-text: #e5e5e5;
+	--color-text-muted: #888;
+	--color-live: #ef4444;
+	--color-ready: #22c55e;
+	--color-warning: #f59e0b;
+
+	--font-body: 'Montserrat', system-ui, -apple-system, sans-serif;
+	--font-heading: 'Google Sans', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+body {
+	background-color: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--font-body);
+	font-size: 13px;
+	letter-spacing: -0.01em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	font-family: var(--font-heading);
+	letter-spacing: -0.02em;
+	font-weight: 400;
+}
+
+code, pre, .font-mono {
+	font-family: var(--font-mono);
+}
