@@ -1,9 +1,37 @@
+# Build artifacts
 target/
+**/target/
 node_modules/
+**/node_modules/
 .svelte-kit/
+web/build/
+web/.svelte-kit/
+
+# Runtime data
+data/
+recordings/
+stingers/
 *.db
 *.db-shm
 *.db-wal
+
+# VCS / local
 .git/
+.gitignore
+.github/
 .env
+.env.*
+
+# OS / editor
 .DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docs not needed in image
+README.md
+CONTRIBUTING.md
+TODO.md
+LICENSE
+docker-compose*.yml
