@@ -3,7 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 # --- Rust builder ---
-FROM rust:1.84 AS rust-builder
+FROM rust:1.86 AS rust-builder
 
 RUN apt-get update && apt-get install -y \
     libgstreamer1.0-dev \
@@ -40,6 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-plugins-ugly \
     gstreamer1.0-libav \
     gstreamer1.0-gl \
+    ffmpeg \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -47,7 +48,7 @@ COPY --from=rust-builder /build/target/release/muxshed-api /usr/local/bin/
 COPY --from=web-builder /build/build /app/web
 
 ENV MUXSHED_DB_PATH=/config/muxshed.db
-ENV MUXSHED_DATA_DIR=/config
+ENV MUXSHED_DATA_DIR=/data
 ENV MUXSHED_WEB_DIR=/app/web
 ENV MUXSHED_LISTEN_ADDR=0.0.0.0:8080
 ENV MUXSHED_LOG_LEVEL=info
@@ -55,9 +56,9 @@ ENV RUST_LOG=info
 
 EXPOSE 8080
 EXPOSE 1935
-EXPOSE 9000/udp
-EXPOSE 8443
+EXPOSE 9000-9099/udp
 
 VOLUME /config
+VOLUME /data
 
 CMD ["/usr/local/bin/muxshed-api"]
