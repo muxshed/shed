@@ -33,7 +33,8 @@ dist/
 # Docker
 docker-compose.override.yml
 
-# Recordings and media
+# Runtime data (recordings, uploaded library assets, thumbnails)
+data/
 recordings/
 stingers/
 
