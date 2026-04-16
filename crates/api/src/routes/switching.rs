@@ -23,7 +23,7 @@ pub async fn get_program(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ProgramState>, ApiError> {
     let program = *state.program_source.borrow();
-    let preview = state.preview_source.read().await.clone();
+    let preview = *state.preview_source.read().await;
     Ok(Json(ProgramState {
         program_source_id: program,
         preview_source_id: preview,
@@ -80,7 +80,7 @@ pub async fn cut(
 pub async fn auto(
     State(state): State<Arc<AppState>>,
 ) -> Result<StatusCode, ApiError> {
-    let preview = state.preview_source.read().await.clone();
+    let preview = *state.preview_source.read().await;
     let preview_id = preview
         .ok_or_else(|| MuxshedError::BadRequest("no source in preview".to_string()))?;
 

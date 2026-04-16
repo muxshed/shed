@@ -7,7 +7,6 @@
 use async_trait::async_trait;
 use gstreamer::prelude::*;
 use muxshed_common::{DelayConfig, Destination, DestinationKind, MuxshedError, PipelineState, RecordingState, WsEvent};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use uuid::Uuid;
@@ -315,7 +314,7 @@ impl PipelineController for GstPipelineController {
         Ok(())
     }
 
-    async fn start_recording(&self, path: &PathBuf) -> Result<(), MuxshedError> {
+    async fn start_recording(&self, path: &std::path::Path) -> Result<(), MuxshedError> {
         let p = self.pipeline.lock().await;
         let Some(ref pipeline) = *p else {
             return Err(MuxshedError::Pipeline("pipeline not running".to_string()));
@@ -356,7 +355,7 @@ impl PipelineController for GstPipelineController {
         let mut rec = self.recording.lock().await;
         *rec = RecordingState {
             recording: true,
-            path: Some(path.clone()),
+            path: Some(path.to_path_buf()),
             started_at: Some(chrono::Utc::now()),
         };
 

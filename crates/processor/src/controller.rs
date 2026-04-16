@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use muxshed_common::{DelayConfig, Destination, MuxshedError, PipelineState, RecordingState};
-use std::path::PathBuf;
+use std::path::Path;
 use uuid::Uuid;
 
 #[async_trait]
@@ -15,7 +15,7 @@ pub trait PipelineController: Send + Sync {
     async fn add_destination(&self, dest: &Destination) -> Result<(), MuxshedError>;
     async fn remove_destination(&self, id: &Uuid) -> Result<(), MuxshedError>;
     async fn activate_scene(&self, scene_id: &Uuid) -> Result<(), MuxshedError>;
-    async fn start_recording(&self, path: &PathBuf) -> Result<(), MuxshedError>;
+    async fn start_recording(&self, path: &Path) -> Result<(), MuxshedError>;
     async fn stop_recording(&self) -> Result<(), MuxshedError>;
     async fn recording_state(&self) -> RecordingState;
     async fn set_delay(&self, config: &DelayConfig) -> Result<(), MuxshedError>;

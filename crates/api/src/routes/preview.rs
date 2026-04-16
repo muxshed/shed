@@ -75,7 +75,7 @@ async fn handle_preview(mut socket: WebSocket, state: Arc<AppState>, id: String)
                 match msg {
                     Ok(data) => {
                         frame_count += 1;
-                        if frame_count <= 5 || frame_count % 300 == 0 {
+                        if frame_count <= 5 || frame_count.is_multiple_of(300) {
                             tracing::debug!("preview frame #{} ({} bytes) for {}", frame_count, data.len(), source_id);
                         }
                         if socket.send(Message::Binary(data.to_vec().into())).await.is_err() {

@@ -4,7 +4,6 @@
 
 use async_trait::async_trait;
 use muxshed_common::{DelayConfig, Destination, MuxshedError, PipelineState, RecordingState, WsEvent};
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use uuid::Uuid;
@@ -114,12 +113,12 @@ impl PipelineController for StubPipelineController {
         Ok(())
     }
 
-    async fn start_recording(&self, path: &PathBuf) -> Result<(), MuxshedError> {
+    async fn start_recording(&self, path: &std::path::Path) -> Result<(), MuxshedError> {
         tracing::info!("stub: start_recording at {:?}", path);
         let mut rec = self.recording.lock().await;
         *rec = RecordingState {
             recording: true,
-            path: Some(path.clone()),
+            path: Some(path.to_path_buf()),
             started_at: Some(chrono::Utc::now()),
         };
         let _ = self.ws_tx.send(WsEvent::RecordingState {

@@ -244,10 +244,10 @@ pub async fn assign_srt_port(state: &AppState) -> u16 {
 
     let mut used: std::collections::HashSet<u16> = used_ports;
     for (kind_json,) in &rows {
-        if let Ok(kind) = serde_json::from_str::<muxshed_common::SourceKind>(kind_json) {
-            if let muxshed_common::SourceKind::Srt { port, .. } = kind {
-                used.insert(port);
-            }
+        if let Ok(muxshed_common::SourceKind::Srt { port, .. }) =
+            serde_json::from_str::<muxshed_common::SourceKind>(kind_json)
+        {
+            used.insert(port);
         }
     }
 

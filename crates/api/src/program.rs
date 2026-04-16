@@ -65,7 +65,7 @@ pub async fn run_program_router(state: Arc<AppState>) {
 
     loop {
         let current_source_id = loop {
-            let current = source_rx.borrow_and_update().clone();
+            let current = *source_rx.borrow_and_update();
             if let Some(id) = current {
                 break id;
             }
@@ -187,7 +187,6 @@ pub async fn run_program_router(state: Arc<AppState>) {
                                         ps.source_id, forwarded
                                     );
                                     // Break to outer loop which will re-enter with new source
-                                    pending_switch = None;
                                     break;
                                 }
                                 // Drop non-keyframe video from new source while waiting
@@ -252,7 +251,7 @@ pub async fn run_program_router(state: Arc<AppState>) {
                 }
             }
 
-            if forwarded == 1 || forwarded == 10 || forwarded % 1000 == 0 {
+            if forwarded == 1 || forwarded == 10 || forwarded.is_multiple_of(1000) {
                 tracing::debug!("program router: forwarded {} packets, output_ts={}", forwarded, output_ts);
             }
         }
