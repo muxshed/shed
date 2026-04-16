@@ -1,3 +1,5 @@
+<img src=".github/images/2000px.png" alt="Muxshed Studio" width="400" />
+
 # Muxshed
 
 Self-hosted multistream studio. Ingest from any source -- OBS, hardware encoders, mobile, browser -- over RTMP, SRT, or WebRTC (WHIP coming soon). Switch between inputs live in a browser-based production switcher. Fan-out to every platform at once: YouTube, Twitch, Kick, Facebook, or any custom RTMP/RTMPS endpoint.

@@ -18,7 +18,7 @@
   </Overview>
   <Category>MediaApp:Video</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
-  <Icon>https://raw.githubusercontent.com/muxshed/shed/main/.github/images/studio_screenshot.png</Icon>
+  <Icon>https://raw.githubusercontent.com/muxshed/shed/main/.github/images/2000px.png</Icon>
   <Config Name="Web UI" Target="8080" Default="8080" Mode="tcp" Description="Web UI and API" Type="Port" Display="always" Required="true">8080</Config>
   <Config Name="RTMP Ingest" Target="1935" Default="1935" Mode="tcp" Description="RTMP ingest port for OBS/encoders" Type="Port" Display="always" Required="true">1935</Config>
   <Config Name="SRT Ingest Start" Target="9000" Default="9000" Mode="udp" Description="First SRT port (per-source ports use 9000-9099 range)" Type="Port" Display="always" Required="false">9000</Config>
