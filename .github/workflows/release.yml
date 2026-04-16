@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release notes
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git describe --tags --abbrev=0 "${VERSION}^" 2>/dev/null || echo "")
+
+          {
+            echo 'NOTES<<RELEASE_EOF'
+            cat <<EOF
+          ## Muxshed ${VERSION}
+
+          Self-hosted multistream studio. Ingest RTMP/SRT, switch live, fan-out to every destination simultaneously.
+
+          ### Quick install
+
+          #### Docker
+
+          \`\`\`sh
+          docker run -d \\
+            --name muxshed \\
+            -p 8080:8080 \\
+            -p 1935:1935 \\
+            -p 9000-9099:9000-9099/udp \\
+            -v muxshed-config:/config \\
+            -v muxshed-data:/data \\
+            --restart unless-stopped \\
+            ghcr.io/muxshed/shed:${VERSION#v}
+          \`\`\`
+
+          Open <http://localhost:8080> to complete setup.
+
+          #### Podman
+
+          \`\`\`sh
+          podman run -d \\
+            --name muxshed \\
+            -p 8080:8080 \\
+            -p 1935:1935 \\
+            -p 9000-9099:9000-9099/udp \\
+            -v muxshed-config:/config \\
+            -v muxshed-data:/data \\
+            --restart unless-stopped \\
+            ghcr.io/muxshed/shed:${VERSION#v}
+          \`\`\`
+
+          #### Docker Compose
+
+          \`\`\`yaml
+          services:
+            muxshed:
+              image: ghcr.io/muxshed/shed:${VERSION#v}
+              container_name: muxshed
+              restart: unless-stopped
+              ports:
+                - "8080:8080"
+                - "1935:1935"
+                - "9000-9099:9000-9099/udp"
+              volumes:
+                - ./config:/config
+                - ./data:/data
+          \`\`\`
+
+          Save as \`docker-compose.yml\` and run \`docker compose up -d\`.
+
+          #### Unraid
+
+          Add as a custom container from the template:
+
+          \`\`\`
+          https://raw.githubusercontent.com/muxshed/shed/main/docker/unraid-template.xml
+          \`\`\`
+
+          ### Image tags
+
+          - \`ghcr.io/muxshed/shed:${VERSION#v}\` -- this exact release
+          - \`ghcr.io/muxshed/shed:latest\` -- tracks the latest tagged release
+          - \`ghcr.io/muxshed/shed:main\` -- current main branch (bleeding edge)
+
+          ### Ports
+
+          | Port | Protocol | Purpose |
+          |------|----------|---------|
+          | 8080 | TCP | Web UI and API |
+          | 1935 | TCP | RTMP ingest (point OBS here) |
+          | 9000-9099 | UDP | SRT ingest (one port per SRT source) |
+
+          ### Volumes
+
+          | Path | Contents |
+          |------|----------|
+          | \`/config\` | SQLite database, settings |
+          | \`/data\` | Library assets, recordings, thumbnails |
+
+          ### Configuration
+
+          All settings are via env vars. Most common:
+
+          | Variable | Default | Description |
+          |----------|---------|-------------|
+          | \`MUXSHED_LOG_LEVEL\` | \`info\` | trace, debug, info, warn, error |
+          | \`MUXSHED_SRT_PORT_START\` | \`9000\` | First port used for SRT sources |
+
+          See the [README](https://github.com/muxshed/shed/blob/main/README.md) for the full list.
+
+          ### Changes
+
+          EOF
+
+            if [ -n "${PREV_TAG}" ]; then
+              echo "**Full changelog:** https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${VERSION}"
+              echo ""
+              git log --pretty=format:"- %s (%h)" "${PREV_TAG}..${VERSION}" | grep -v "^- Merge " || echo "- (no commit-level changes)"
+            else
+              echo "Initial tagged release."
+            fi
+
+            echo ""
+            echo RELEASE_EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Muxshed ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.NOTES }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
