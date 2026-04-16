@@ -3,7 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 # --- Rust builder ---
-FROM rust:1.86 AS rust-builder
+FROM rust:1.87 AS rust-builder
 
 RUN apt-get update && apt-get install -y \
     libgstreamer1.0-dev \
