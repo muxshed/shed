@@ -4,9 +4,8 @@
 
 # syntax=docker/dockerfile:1.7
 
-# --- cargo-chef: analyze dependency graph ---
-FROM rust:1.87-slim AS chef
-RUN cargo install cargo-chef --version 0.1.71 --locked
+# --- cargo-chef: pre-built image (skips 5min cargo-chef compile) ---
+FROM lukemathwalker/cargo-chef:latest-rust-1.87 AS chef
 WORKDIR /build
 
 FROM chef AS planner
@@ -14,24 +13,21 @@ COPY Cargo.toml Cargo.toml
 COPY crates/ crates/
 RUN cargo chef prepare --recipe-path recipe.json
 
-# --- Rust builder: build deps first (cached), then app ---
+# --- Rust builder ---
 FROM chef AS rust-builder
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgstreamer1.0-dev \
-    libgstreamer-plugins-base1.0-dev \
-    libgstreamer-plugins-bad1.0-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=planner /build/recipe.json recipe.json
 
-# Build dependencies only — cached unless Cargo.toml / Cargo.lock change
+# Build dependencies only. Cached unless Cargo.toml changes.
+# The runtime pipeline uses FFmpeg; GStreamer feature is not built to save
+# ~15-20min of compile time. Enable it here if you need GstPipelineController.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
-    cargo chef cook --release --features muxshed-processor/gstreamer --recipe-path recipe.json
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+    CARGO_PROFILE_RELEASE_LTO=false \
+    cargo chef cook --release --recipe-path recipe.json
 
-# Build application — only this layer changes when app code changes
 COPY Cargo.toml Cargo.toml
 COPY crates/ crates/
 COPY migrations/ migrations/
@@ -40,7 +36,9 @@ ENV SQLX_OFFLINE=true
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
-    cargo build --release --features muxshed-processor/gstreamer && \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+    CARGO_PROFILE_RELEASE_LTO=false \
+    cargo build --release && \
     cp /build/target/release/muxshed-api /usr/local/bin/muxshed-api
 
 # --- Web builder ---
@@ -57,13 +55,6 @@ RUN npm run build
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gstreamer1.0-tools \
-    gstreamer1.0-plugins-base \
-    gstreamer1.0-plugins-good \
-    gstreamer1.0-plugins-bad \
-    gstreamer1.0-plugins-ugly \
-    gstreamer1.0-libav \
-    gstreamer1.0-gl \
     ffmpeg \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
