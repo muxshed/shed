@@ -6,7 +6,7 @@
 
 # --- cargo-chef: analyze dependency graph ---
 FROM rust:1.87-slim AS chef
-RUN cargo install cargo-chef --locked
+RUN cargo install cargo-chef --version 0.1.71 --locked
 WORKDIR /build
 
 FROM chef AS planner
