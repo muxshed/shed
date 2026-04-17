@@ -1,35 +1,67 @@
 @import 'tailwindcss';
 
-:root {
-	--color-bg: #0f0f0f;
-	--color-surface: #1a1a1a;
-	--color-surface-hover: #252525;
-	--color-border: #333;
-	--color-text: #e5e5e5;
-	--color-text-muted: #888;
-	--color-live: #ef4444;
-	--color-ready: #22c55e;
-	--color-warning: #f59e0b;
+@layer base {
+  :root {
+    color-scheme: dark;
+    --background: #0d0c18;
+    --foreground: #f0eeff;
+    --brand: #3C3459;
+    --brand-light: #5a4e8a;
+    --success: #3CA643;
+    --warning: #F2E96D;
+    --surface: rgba(255, 255, 255, 0.03);
+    --surface-hover: rgba(255, 255, 255, 0.06);
+    --border: rgba(255, 255, 255, 0.07);
+    --text-muted: rgba(255, 255, 255, 0.4);
+  }
 
-	--font-body: 'Montserrat', system-ui, -apple-system, sans-serif;
-	--font-heading: 'Google Sans', system-ui, sans-serif;
-	--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  body {
+    @apply bg-[--background] text-[--foreground];
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 }
 
-body {
-	background-color: var(--color-bg);
-	color: var(--color-text);
-	font-family: var(--font-body);
-	font-size: 13px;
-	letter-spacing: -0.01em;
+@layer components {
+  .card-glass {
+    @apply bg-[--surface] border border-[--border] rounded-xl transition-colors hover:border-[rgba(90,78,138,0.4)];
+  }
+
+  .nav-item {
+    @apply px-3 py-1.5 rounded-md text-sm text-[--text-muted] cursor-pointer transition-all border border-transparent;
+  }
+
+  .nav-item.active {
+    @apply text-[--foreground] bg-[rgba(60,52,89,0.45)] border-[rgba(90,78,138,0.35)];
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-br from-[--brand] to-[--brand-light] text-white px-3 py-1.5 rounded-lg font-semibold text-sm hover:shadow-lg hover:shadow-[rgba(60,52,89,0.35)] transition-all;
+  }
+
+  .badge-success {
+    @apply inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-[rgba(60,166,67,0.15)] text-[--success] border border-[rgba(60,166,67,0.3)];
+  }
+
+  .badge-muted {
+    @apply inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold bg-[rgba(90,78,138,0.4)] text-[#a89fd6] border border-[rgba(90,78,138,0.3)];
+  }
 }
 
-h1, h2, h3, h4, h5, h6 {
-	font-family: var(--font-heading);
-	letter-spacing: -0.02em;
-	font-weight: 400;
-}
+@layer utilities {
+  .glow-brand {
+    box-shadow: 0 0 16px rgba(60, 52, 89, 0.35);
+  }
 
-code, pre, .font-mono {
-	font-family: var(--font-mono);
+  .glow-success {
+    box-shadow: 0 0 14px rgba(60, 166, 67, 0.25);
+  }
+
+  .text-label {
+    @apply text-xs font-bold uppercase tracking-widest text-[rgba(255,255,255,0.3)];
+  }
+
+  .text-muted {
+    @apply text-sm text-[--text-muted];
+  }
 }
