@@ -1,12 +1,21 @@
 <!-- src/components/StatCard.svelte -->
 <script lang="ts">
-  export let label: string
-  export let value: string | number
-  export let subtitle = ''
-  export let accent: 'green' | 'purple' | 'default' = 'default'
+  let {
+    label,
+    value,
+    subtitle = '',
+    accent = 'default'
+  }: {
+    label: string
+    value: string | number
+    subtitle?: string
+    accent?: 'green' | 'purple' | 'default'
+  } = $props()
+
+  const accentClass = accent !== 'default' ? `accent-${accent}` : ''
 </script>
 
-<div class="stat-card" class:accent-{accent}>
+<div class={`stat-card ${accentClass}`.trim()}>
   <div class="stat-label">{label}</div>
   <div class="stat-value">{value}</div>
   {#if subtitle}
