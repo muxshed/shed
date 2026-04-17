@@ -1,5 +1,13 @@
 // Licensed under the Business Source License 1.1 — see LICENSE.
 
+export interface Instance {
+	id: string;
+	name: string;
+	url: string;
+	api_key: string;
+	created_at: string;
+}
+
 export type SourceKind =
 	| { type: 'rtmp'; stream_key: string }
 	| { type: 'srt'; port: number; passphrase?: string }
@@ -70,6 +78,15 @@ export interface RecordingState {
 	recording: boolean;
 	path?: string;
 	started_at?: string;
+}
+
+export type OverlayKind = { type: 'image'; asset_id: string } | { type: 'text'; content: string };
+
+export interface Overlay {
+	id: string;
+	name: string;
+	kind: OverlayKind;
+	visible: boolean;
 }
 
 export interface BroadcastConfig {
