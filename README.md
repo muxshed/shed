@@ -263,4 +263,6 @@ An Unraid community app template is included at `docker/unraid-template.xml`.
 
 ## License
 
-[Mozilla Public License 2.0](LICENSE)
+[Business Source License 1.1](LICENSE)
+
+Converts to Apache License 2.0 on 2030-04-17. Self-hosting for personal or internal business use is always permitted. See LICENSE for full terms.
