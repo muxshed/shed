@@ -1,7 +1,6 @@
-<!-- src/components/OfflineState.svelte -->
+<!-- Licensed under the Business Source License 1.1 — see LICENSE. -->
 <script lang="ts">
-  export let title = 'Instance Offline'
-  export let message = 'The instance is not currently running. Start it from the dashboard to continue.'
+  let { title = 'Instance Offline', message = 'The instance is not currently running. Start it from the dashboard to continue.' } = $props();
 </script>
 
 <div class="offline-state">

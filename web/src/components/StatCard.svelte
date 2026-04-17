@@ -12,10 +12,10 @@
     accent?: 'green' | 'purple' | 'default'
   } = $props()
 
-  const accentClass = accent !== 'default' ? `accent-${accent}` : ''
+  const getAccentClass = () => accent !== 'default' ? `accent-${accent}` : '';
 </script>
 
-<div class={`stat-card ${accentClass}`.trim()}>
+<div class={`stat-card ${getAccentClass()}`.trim()}>
   <div class="stat-label">{label}</div>
   <div class="stat-value">{value}</div>
   {#if subtitle}

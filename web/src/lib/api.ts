@@ -310,32 +310,32 @@ export const api = {
 		}),
 
 	// Studio endpoints (proxied through portal-api to instance)
-	getSources: (instanceId: string) => request<Source[]>(`/instances/${instanceId}/sources`),
-	createSource: (instanceId: string, data: any) =>
+	getInstanceSources: (instanceId: string) => request<Source[]>(`/instances/${instanceId}/sources`),
+	createInstanceSource: (instanceId: string, data: any) =>
 		request<Source>(`/instances/${instanceId}/sources`, {
 			method: 'POST',
 			body: JSON.stringify(data),
 		}),
 
-	getScenes: (instanceId: string) => request<Scene[]>(`/instances/${instanceId}/scenes`),
-	getDestinations: (instanceId: string) => request<Destination[]>(`/instances/${instanceId}/destinations`),
-	getOverlays: (instanceId: string) => request<any[]>(`/instances/${instanceId}/overlays`),
+	getInstanceScenes: (instanceId: string) => request<Scene[]>(`/instances/${instanceId}/scenes`),
+	getInstanceDestinations: (instanceId: string) => request<Destination[]>(`/instances/${instanceId}/destinations`),
+	getInstanceOverlays: (instanceId: string) => request<any[]>(`/instances/${instanceId}/overlays`),
 
-	getPipelineState: (instanceId: string) => request<any>(`/instances/${instanceId}/status`),
-	startStream: (instanceId: string) =>
+	getInstancePipelineState: (instanceId: string) => request<any>(`/instances/${instanceId}/status`),
+	startInstanceStream: (instanceId: string) =>
 		request<void>(`/instances/${instanceId}/stream/start`, {
 			method: 'POST',
 		}),
-	stopStream: (instanceId: string) =>
+	stopInstanceStream: (instanceId: string) =>
 		request<void>(`/instances/${instanceId}/stream/stop`, {
 			method: 'POST',
 		}),
 
-	startRecording: (instanceId: string) =>
+	startInstanceRecording: (instanceId: string) =>
 		request<void>(`/instances/${instanceId}/record/start`, {
 			method: 'POST',
 		}),
-	stopRecording: (instanceId: string) =>
+	stopInstanceRecording: (instanceId: string) =>
 		request<void>(`/instances/${instanceId}/record/stop`, {
 			method: 'POST',
 		}),
