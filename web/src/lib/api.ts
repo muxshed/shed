@@ -299,4 +299,44 @@ export const api = {
 			body: JSON.stringify({ name, scopes }),
 		}),
 	deleteKey: (id: string) => request<void>(`/keys/${id}`, { method: 'DELETE' }),
+
+	// Instances (commercial managed service)
+	listInstances: () => request<any[]>('/instances'),
+	getInstance: (id: string) => request<any>(`/instances/${id}`),
+	createInstance: (data: any) =>
+		request<any>('/instances', {
+			method: 'POST',
+			body: JSON.stringify(data),
+		}),
+
+	// Studio endpoints (proxied through portal-api to instance)
+	getSources: (instanceId: string) => request<Source[]>(`/instances/${instanceId}/sources`),
+	createSource: (instanceId: string, data: any) =>
+		request<Source>(`/instances/${instanceId}/sources`, {
+			method: 'POST',
+			body: JSON.stringify(data),
+		}),
+
+	getScenes: (instanceId: string) => request<Scene[]>(`/instances/${instanceId}/scenes`),
+	getDestinations: (instanceId: string) => request<Destination[]>(`/instances/${instanceId}/destinations`),
+	getOverlays: (instanceId: string) => request<any[]>(`/instances/${instanceId}/overlays`),
+
+	getPipelineState: (instanceId: string) => request<any>(`/instances/${instanceId}/status`),
+	startStream: (instanceId: string) =>
+		request<void>(`/instances/${instanceId}/stream/start`, {
+			method: 'POST',
+		}),
+	stopStream: (instanceId: string) =>
+		request<void>(`/instances/${instanceId}/stream/stop`, {
+			method: 'POST',
+		}),
+
+	startRecording: (instanceId: string) =>
+		request<void>(`/instances/${instanceId}/record/start`, {
+			method: 'POST',
+		}),
+	stopRecording: (instanceId: string) =>
+		request<void>(`/instances/${instanceId}/record/stop`, {
+			method: 'POST',
+		}),
 };
