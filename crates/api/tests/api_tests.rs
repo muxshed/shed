@@ -64,6 +64,7 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         program_source: program_source_tx,
         preview_source: tokio::sync::RwLock::new(None),
         audio_routing: audio_routing_tx,
+        system_token: None,
     });
 
     (build_router(state.clone(), None), key, state)
