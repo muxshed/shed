@@ -12,6 +12,7 @@ use muxshed_api::program::run_program_router;
 use muxshed_api::routes;
 use muxshed_api::rtmp::start_rtmp_server;
 use muxshed_api::state::AppState;
+use muxshed_api::auth::hash_key;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,6 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (audio_routing_tx, _audio_routing_rx) = watch::channel(saved_audio_routing);
     let pipeline = Arc::new(StubPipelineController::new(ws_tx.clone()));
 
+    // Load system token from environment (portal-issued, immutable)
+    let system_token = std::env::var("MUXSHED_SYSTEM_TOKEN")
+        .ok()
+        .map(|token| hash_key(&token));
+
     let state = Arc::new(AppState {
         pipeline,
         config: Arc::new(RwLock::new(config.clone())),
@@ -71,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         program_source: program_source_tx,
         preview_source: RwLock::new(None),
         audio_routing: audio_routing_tx,
+        system_token,
     });
 
     {

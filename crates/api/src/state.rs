@@ -32,6 +32,8 @@ pub struct AppState {
     pub preview_source: RwLock<Option<Uuid>>,
     /// Audio routing: which sources are providing audio and at what level
     pub audio_routing: watch::Sender<AudioRouting>,
+    /// System token for portal communication (immutable, always-valid)
+    pub system_token: Option<String>,
 }
 
 #[derive(Clone, Default)]

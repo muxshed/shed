@@ -22,6 +22,19 @@ pub async fn auth_middleware(
     req: Request<axum::body::Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // Check system token from header (immutable, always-valid)
+    if let Some(key) = req
+        .headers()
+        .get("X-API-Key")
+        .and_then(|v| v.to_str().ok())
+    {
+        if let Some(system_token) = &state.system_token {
+            if validate_system_token(system_token, key) {
+                return Ok(next.run(req).await);
+            }
+        }
+    }
+
     // Check session token from Authorization header
     if let Some(token) = extract_bearer_token(&req) {
         if validate_session(&state.db, &token).await {
@@ -55,6 +68,11 @@ pub async fn auth_middleware(
     }
 
     Err(StatusCode::UNAUTHORIZED)
+}
+
+fn validate_system_token(system_token_hash: &str, provided_key: &str) -> bool {
+    let hash = hash_key(provided_key);
+    hash == system_token_hash
 }
 
 fn extract_bearer_token(req: &Request<axum::body::Body>) -> Option<String> {
