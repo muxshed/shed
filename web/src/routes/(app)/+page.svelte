@@ -17,8 +17,8 @@
 	import { popout } from '$lib/popout';
 	import PopoutButton from '../../components/PopoutButton.svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { notify } from '$lib/notify';
 
-	let error = $state('');
 	let stingers = $state<StingerConfig[]>([]);
 	let assets = $state<Asset[]>([]);
 	let programSourceId = $state<string | null>(null);
@@ -148,43 +148,39 @@
 	}
 
 	async function cutToSource(id: string) {
-		error = '';
 		try {
 			await api.cutToSource(id);
 			programSourceId = id;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Switch failed';
+			notify.error(e);
 		}
 	}
 
 	async function pushPreviewToLive() {
 		if (!previewSourceId) {
-			error = 'No source queued in Next Up';
+			notify.error('No source queued in Next Up');
 			return;
 		}
-		error = '';
 		try {
 			await api.cutToSource(previewSourceId);
 			programSourceId = previewSourceId;
 			previewSourceId = null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Push to live failed';
+			notify.error(e);
 		}
 	}
 
 	async function setAudioSource(sourceId: string | null) {
-		error = '';
 		try {
 			await api.setAudioSource(sourceId);
 			audioRouting.active_audio_source = sourceId;
 			audioRouting.audio_follows_video = sourceId === null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Audio routing failed';
+			notify.error(e);
 		}
 	}
 
 	async function toggleRecording() {
-		error = '';
 		try {
 			if ($isRecording) {
 				await api.stopRecording();
@@ -192,13 +188,13 @@
 				await api.startRecording();
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Recording error';
+			notify.error(e);
 		}
 	}
 
 	async function bleep() {
 		try { await api.triggerBleep(); } catch (e) {
-			error = e instanceof Error ? e.message : 'Bleep failed';
+			notify.error(e);
 		}
 	}
 
@@ -206,8 +202,9 @@
 		try {
 			config = await api.setBroadcastConfig(config);
 			configDirty = false;
+			notify.success('Config saved');
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save';
+			notify.error(e);
 		}
 	}
 
@@ -215,7 +212,7 @@
 		try {
 			outputConfig = await api.setOutputConfig(outputConfig);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save output config';
+			notify.error(e);
 		}
 	}
 
@@ -258,169 +255,158 @@
 	});
 </script>
 
-<div class="mx-auto max-w-7xl">
+<div class="mx-auto max-w-[1400px]">
 	<!-- Header -->
-	<div class="mb-4 flex items-center justify-between">
-		<h1 class="text-xl font-bold">Studio</h1>
+	<div class="mb-4 flex items-center justify-between border-b border-border pb-3">
+		<h1 class="text-[13px] tracking-widest text-amber-bright">STUDIO</h1>
 		<div class="flex items-center gap-3">
 			<StatusIndicator state={$pipelineState} />
 			{#if $isLive && $pipelineState.state === 'live'}
-				<span class="text-xs text-neutral-500">
-					{formatDuration(outputStats.duration_secs)}
-				</span>
+				<span class="led text-[18px]">{formatDuration(outputStats.duration_secs)}</span>
 			{/if}
 		</div>
 	</div>
 
 		<!-- ========== STUDIO ========== -->
 
-		<!-- Studio top bar -->
-		<div class="mb-4 flex items-center gap-3">
-			{#if $isLive}
-				<button
-					onclick={async () => { error = ''; try { await api.stopStream(); } catch(e) { error = e instanceof Error ? e.message : 'Failed'; }}}
-					class="rounded-lg bg-red-700 px-5 py-2 text-sm font-bold text-white hover:bg-red-600"
-				>
-					End Stream
-				</button>
-				<button
-					onclick={toggleRecording}
-					class="rounded px-3 py-2 text-xs font-bold {$isRecording
-						? 'bg-red-800 text-red-200'
-						: 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'}"
-				>
-					{$isRecording ? 'Stop Rec' : 'Record'}
-				</button>
-				<button
-					onclick={bleep}
-					class="rounded bg-yellow-700 px-3 py-2 text-xs font-bold text-white hover:bg-yellow-600"
-				>
-					BLEEP
-				</button>
-			{:else}
-				<button
-					onclick={async () => {
-						error = '';
-						try {
-							await api.startStream(programSourceId || undefined);
-							startStatsPolling();
-						} catch(e) {
-							error = e instanceof Error ? e.message : 'Failed to go live';
-						}
-					}}
-					class="rounded-lg bg-green-700 px-5 py-2 text-sm font-bold text-white hover:bg-green-600"
-				>
-					Go Live
-				</button>
-			{/if}
-		</div>
-
-		{#if $isLive && $pipelineState.state === 'live'}
-			<div class="mb-4 rounded-lg border border-red-900 bg-red-950 px-4 py-2 text-center">
-				<span class="text-sm text-red-300">
-					Live since {new Date($pipelineState.started_at).toLocaleTimeString()}
-				</span>
+		<!-- Master controls -->
+		<section class="panel mb-4">
+			<header class="panel__head">▮ CONTROLS</header>
+			<div class="panel__body flex flex-wrap items-center gap-3">
+				{#if $isLive}
+					<button
+						onclick={async () => { try { await api.stopStream(); } catch(e) { notify.error(e); }}}
+						class="btn btn--danger"
+					>
+						■ End Stream
+					</button>
+					<button
+						onclick={toggleRecording}
+						class="btn {$isRecording ? 'btn--danger' : ''}"
+					>
+						{$isRecording ? '● Stop Rec' : '● Record'}
+					</button>
+					<button
+						onclick={bleep}
+						class="btn"
+						style="border-color: var(--color-warning); color: var(--color-warning)"
+					>
+						▲ Bleep
+					</button>
+					{#if $pipelineState.state === 'live'}
+						<span class="pill pill--live ml-auto">● ON AIR — since {new Date($pipelineState.started_at).toLocaleTimeString()}</span>
+					{/if}
+				{:else}
+					<button
+						onclick={async () => {
+							try {
+								await api.startStream(programSourceId || undefined);
+								startStatsPolling();
+							} catch(e) {
+								notify.error(e);
+							}
+						}}
+						class="btn btn--go"
+					>
+						● Go Live
+					</button>
+					<span class="pill pill--idle ml-auto">○ OFF AIR</span>
+				{/if}
 			</div>
-		{/if}
+		</section>
 
-		<!-- Next Up + Live side by side -->
+		<!-- Preview + Program monitors -->
 		<div class="mb-4 grid grid-cols-2 gap-4">
-			<!-- Next Up (left) -->
-			<div>
-				{#if previewSourceId}
-					<div class="mb-1 flex items-center justify-between">
-						<div class="flex items-center gap-1">
-							<h2 class="text-xs font-semibold uppercase tracking-wide text-green-400">Next Up</h2>
-							<PopoutButton section="preview" width={640} height={420} />
-						</div>
-						<button
-							onclick={pushPreviewToLive}
-							class="rounded bg-red-700 px-4 py-1 text-xs font-bold text-white hover:bg-red-600"
-						>
-							Push to Live
+			<!-- Preview / Next Up (left) -->
+			<section class="panel">
+				<header class="panel__head">
+					<span class="flex items-center gap-2">
+						▮ PREVIEW
+						<PopoutButton section="preview" width={640} height={420} />
+					</span>
+					{#if previewSourceId}
+						<button onclick={pushPreviewToLive} class="btn btn--danger" style="min-height:24px;padding:2px 10px">
+							▸ Push to Live
 						</button>
-					</div>
+					{/if}
+				</header>
+				{#if previewSourceId}
 					{#key previewSourceId}
 						<VideoPreview sourceId={previewSourceId} />
 					{/key}
 				{:else}
-					<div class="mb-1">
-						<h2 class="text-xs font-semibold uppercase tracking-wide text-neutral-500">Next Up</h2>
-					</div>
-					<div class="flex aspect-video items-center justify-center rounded-lg border-2 border-dashed border-neutral-700 bg-neutral-950">
-						<span class="text-sm text-neutral-600">Select a source below to queue</span>
+					<div class="scanlines-well flex aspect-video items-center justify-center border-t border-border">
+						<span class="text-amber-muted">Select a source below to queue</span>
 					</div>
 				{/if}
-			</div>
+			</section>
 
-			<!-- Live (right) -->
-			<div>
-				<div class="mb-1 flex items-center justify-between">
-					<div class="flex items-center gap-1">
-						<h2 class="text-xs font-semibold uppercase tracking-wide {$isLive ? 'text-red-400' : 'text-neutral-400'}">
-							Live
-						</h2>
+			<!-- Program / Live (right) -->
+			<section class="panel">
+				<header class="panel__head">
+					<span class="flex items-center gap-2 {$isLive ? 'text-danger-glow' : ''}">
+						▮ PROGRAM
 						<PopoutButton section="program" width={960} height={600} />
-					</div>
+					</span>
 					{#if programSourceId}
 						{@const progSrc = $sources.find((s) => s.id === programSourceId)}
-						<span class="text-xs text-neutral-500">{progSrc?.name || ''}</span>
+						<span class="text-amber-dim normal-case tracking-normal">{progSrc?.name || ''}</span>
 					{/if}
-				</div>
+				</header>
 				{#if programSourceId}
 					{#key programSourceId}
 						<VideoPreview sourceId={programSourceId} active={true} />
 					{/key}
 				{:else}
-					<div class="flex aspect-video items-center justify-center rounded-lg border-2 border-red-900 bg-black">
-						<span class="text-sm text-neutral-600">No source on live</span>
+					<div class="scanlines-well flex aspect-video items-center justify-center border-t border-border">
+						<span class="text-amber-muted">No source on live</span>
 					</div>
 				{/if}
-			</div>
+			</section>
 		</div>
 
 		<!-- Config + Stats side by side under previews -->
 		<div class="mb-4 grid grid-cols-2 gap-4">
 			<!-- Config (under Program) -->
-			<div class="rounded-lg border border-neutral-700 bg-neutral-900 p-3">
-				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Output Config</h3>
-				<div class="space-y-1 text-xs">
+			<section class="panel">
+				<header class="panel__head">▮ OUTPUT CONFIG</header>
+				<div class="panel__body space-y-1">
 					<div class="flex justify-between">
-						<span class="text-neutral-500">Resolution</span>
-						<span class="font-mono text-white">{outputConfig.width}x{outputConfig.height}@{outputConfig.fps}fps</span>
+						<span class="text-amber-dim">Resolution</span>
+						<span class="text-amber-bright">{outputConfig.width}x{outputConfig.height}@{outputConfig.fps}fps</span>
 					</div>
 					<div class="flex justify-between">
-						<span class="text-neutral-500">Video bitrate</span>
-						<span class="font-mono text-white">{outputConfig.video_bitrate_kbps} kbps</span>
+						<span class="text-amber-dim">Video bitrate</span>
+						<span class="text-amber-bright">{outputConfig.video_bitrate_kbps} kbps</span>
 					</div>
 					{#if $destinations.length > 0}
-						<div class="border-t border-neutral-700 pt-1 mt-1">
-							<span class="text-neutral-500">Destinations</span>
+						<div class="mt-2 border-t border-border-dim pt-2">
+							<span class="label">Destinations</span>
 							<div class="mt-1 space-y-1">
 								{#each $destinations as dest (dest.id)}
 									<button
 										onclick={() => toggleDestination(dest.id)}
-										class="flex items-center gap-2 cursor-pointer"
+										class="flex cursor-pointer items-center gap-2"
 									>
 										<Checkbox
 											checked={config.destination_ids.length === 0
 												? dest.enabled
 												: config.destination_ids.includes(dest.id)}
 										/>
-										<span class="text-white text-xs">{dest.name}</span>
+										<span class="text-amber">{dest.name}</span>
 									</button>
 								{/each}
 							</div>
 						</div>
 					{:else}
 						<div class="flex justify-between">
-							<span class="text-neutral-500">Destinations</span>
-							<a href="/destinations" class="text-blue-400 hover:underline">Add one</a>
+							<span class="text-amber-dim">Destinations</span>
+							<a href="/destinations" class="text-amber hover:text-amber-bright">Add one ▸</a>
 						</div>
 					{/if}
 					<div class="flex justify-between">
-						<span class="text-neutral-500">Audio</span>
-						<span class="text-white">
+						<span class="text-amber-dim">Audio</span>
+						<span class="text-amber">
 							{#if audioRouting.audio_follows_video}
 								Follows video
 							{:else if audioRouting.active_audio_source}
@@ -433,77 +419,70 @@
 					</div>
 					{#if outputStats.source_encoder}
 						<div class="flex justify-between">
-							<span class="text-neutral-500">Encoder</span>
-							<span class="truncate text-neutral-400 ml-2">{outputStats.source_encoder}</span>
+							<span class="text-amber-dim">Encoder</span>
+							<span class="ml-2 truncate text-amber-dim">{outputStats.source_encoder}</span>
 						</div>
 					{/if}
 					{#if configDirty}
-						<button
-							onclick={saveConfig}
-							class="mt-2 w-full rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
-						>
-							Save Config
-						</button>
+						<button onclick={saveConfig} class="btn mt-2 w-full">Save Config</button>
 					{/if}
 				</div>
-			</div>
+			</section>
 
 			<!-- Stats (under Next Up) -->
-			<div class="rounded-lg border border-neutral-700 bg-neutral-900 p-3">
-				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Stream Stats</h3>
-				<div class="space-y-1 text-xs">
-					<div class="flex justify-between">
-						<span class="text-neutral-500">Duration</span>
-						<span class="font-mono text-white">{formatDuration(outputStats.duration_secs)}</span>
+			<section class="panel">
+				<header class="panel__head">▮ STREAM STATS</header>
+				<div class="panel__body space-y-1">
+					<div class="flex items-baseline justify-between">
+						<span class="text-amber-dim">Duration</span>
+						<span class="led text-[18px]">{formatDuration(outputStats.duration_secs)}</span>
 					</div>
 					<div class="flex justify-between">
-						<span class="text-neutral-500">Data sent</span>
-						<span class="font-mono text-white">{formatBytes(outputStats.bytes_sent)}</span>
+						<span class="text-amber-dim">Data sent</span>
+						<span class="text-amber-bright">{formatBytes(outputStats.bytes_sent)}</span>
 					</div>
 					<div class="flex justify-between">
-						<span class="text-neutral-500">Source</span>
-						<span class="font-mono text-white">
+						<span class="text-amber-dim">Source</span>
+						<span class="text-amber-bright">
 							{outputStats.source_width || '?'}x{outputStats.source_height || '?'}
 							{#if outputStats.source_fps}@{outputStats.source_fps.toFixed(0)}fps{/if}
 						</span>
 					</div>
-					<div class="flex justify-between">
-						<span class="text-neutral-500">Source bitrate</span>
-						<span class="font-mono text-white">{outputStats.source_bitrate_kbps.toFixed(0)} kbps</span>
+					<div class="flex items-baseline justify-between">
+						<span class="text-amber-dim">Source bitrate</span>
+						<span class="led text-[18px]">{outputStats.source_bitrate_kbps.toFixed(0)} kbps</span>
 					</div>
-					<div class="flex justify-between">
-						<span class="text-neutral-500">Output bitrate</span>
-						<span class="font-mono text-white">{outputStats.output_bitrate_kbps} kbps</span>
+					<div class="flex items-baseline justify-between">
+						<span class="text-amber-dim">Output bitrate</span>
+						<span class="led text-[18px]">{outputStats.output_bitrate_kbps} kbps</span>
 					</div>
 				</div>
-			</div>
+			</section>
 		</div>
 
 		<!-- Audio Mixer -->
 		{#if liveSources().length > 0}
-			<div class="mb-4 rounded-lg border border-neutral-700 bg-neutral-900 p-3">
-				<div class="mb-2 flex items-center justify-between">
-					<div class="flex items-center gap-1">
-						<h3 class="text-xs font-semibold uppercase tracking-wide text-neutral-400">Audio</h3>
+			<section class="panel mb-4">
+				<header class="panel__head">
+					<span class="flex items-center gap-2">
+						▮ AUDIO
 						<PopoutButton section="audio" width={400} height={500} />
-					</div>
+					</span>
 					<button
 						onclick={async () => {
-							error = '';
 							try {
 								await api.toggleAudioFollowsVideo();
 								audioRouting.audio_follows_video = !audioRouting.audio_follows_video;
 								if (audioRouting.audio_follows_video) audioRouting.active_audio_source = null;
-							} catch (e) { error = e instanceof Error ? e.message : 'Toggle failed'; }
+							} catch (e) { notify.error(e); }
 						}}
-						class="rounded px-2 py-0.5 text-xs {audioRouting.audio_follows_video
-							? 'bg-green-900 text-green-400'
-							: 'bg-neutral-700 text-neutral-400'}"
+						class="btn {audioRouting.audio_follows_video ? 'btn--go' : ''}"
+						style="min-height:24px;padding:2px 8px"
 					>
-						{audioRouting.audio_follows_video ? 'Follows video' : 'Independent'}
+						{audioRouting.audio_follows_video ? 'Follows Video' : 'Independent'}
 					</button>
-				</div>
-				<div class="flex gap-3">
+				</header>
+				<div class="panel__body flex gap-3">
 					{#each liveSources() as source (source.id)}
 						{@const isAudioSource = audioRouting.audio_follows_video
 							? source.id === programSourceId
@@ -511,44 +490,42 @@
 						<button
 							onclick={() => setAudioSource(source.id)}
 							disabled={audioRouting.audio_follows_video}
-							class="flex flex-1 items-center gap-2 rounded px-3 py-2 text-left transition-all {isAudioSource
-								? 'bg-green-950 ring-1 ring-green-600'
-								: 'bg-neutral-800'} disabled:cursor-default"
+							class="row flex-1 text-left {isAudioSource ? 'border-live' : ''} disabled:cursor-default"
 						>
-							<div class="flex h-5 w-12 items-end gap-px">
+							<div class="scanlines-well flex h-5 w-12 items-end gap-px border border-border-dim p-px">
 								{#each Array(8) as _, i}
 									<div
-										class="w-1 rounded-sm {isAudioSource ? (i < 6 ? 'bg-green-500' : i < 7 ? 'bg-yellow-500' : 'bg-red-500') : 'bg-neutral-700'}"
-										style="height: {isAudioSource ? Math.max(20, Math.random() * 100) : 20}%"
+										class="w-1 {isAudioSource ? (i < 6 ? 'bg-live' : i < 7 ? 'bg-warning' : 'bg-danger') : 'bg-border-dim'}"
+										style="height: {isAudioSource ? Math.max(20, Math.random() * 100) : 12}%"
 									></div>
 								{/each}
 							</div>
 							<div class="min-w-0 flex-1">
-								<div class="truncate text-xs font-medium {isAudioSource ? 'text-white' : 'text-neutral-400'}">
+								<div class="truncate {isAudioSource ? 'text-amber-bright' : 'text-amber-dim'}">
 									{source.name}
 								</div>
 							</div>
 							{#if isAudioSource}
-								<span class="shrink-0 rounded bg-green-900 px-1.5 py-0.5 text-xs text-green-400">ACTIVE</span>
+								<span class="pill pill--live shrink-0">● ACTIVE</span>
 							{/if}
 						</button>
 					{/each}
 				</div>
-			</div>
+			</section>
 		{/if}
 
-		<!-- Tabbed section: Sources / Scenes / Library -->
-		<div class="rounded-lg border border-neutral-700 bg-neutral-900">
-			<div class="flex items-center border-b border-neutral-700">
+		<!-- Tabbed section: Sources / Library -->
+		<section class="panel">
+			<div class="flex items-center border-b border-border-dim bg-panel-raised">
 				{#each [
 					{ id: 'sources', label: 'Sources' },
 					{ id: 'library', label: 'Library' },
 				] as tab}
 					<button
 						onclick={() => (activeTab = tab.id as typeof activeTab)}
-						class="px-5 py-2.5 text-sm font-medium transition-colors {activeTab === tab.id
-							? 'border-b-2 border-blue-500 text-white'
-							: 'text-neutral-400 hover:text-neutral-200'}"
+						class="px-5 py-2.5 text-[11px] uppercase tracking-[1px] transition-colors {activeTab === tab.id
+							? 'border-b-2 border-amber text-amber-bright'
+							: 'border-b-2 border-transparent text-amber-dim hover:text-amber'}"
 					>
 						{tab.label}
 					</button>
@@ -561,16 +538,16 @@
 			<div class="p-4">
 				{#if activeTab === 'sources'}
 					{#if liveStreamSources().length === 0}
-						<p class="text-sm text-neutral-500">No live sources. Connect OBS to start.</p>
+						<p class="text-amber-muted">No live sources. Connect OBS to start.</p>
 					{:else}
-						<div class="grid gap-3 {liveStreamSources().length <= 3 ? `grid-cols-${liveStreamSources().length}` : 'grid-cols-3'}">
+						<div class="grid gap-3" style="grid-template-columns: repeat({Math.min(liveStreamSources().length, 3)}, minmax(0, 1fr))">
 							{#each liveStreamSources() as source (source.id)}
 								<div
-									class="cursor-pointer rounded-lg border-2 p-2 transition-all {source.id === programSourceId
-										? 'border-red-500 bg-red-950/30'
+									class="rounded-sm border p-2 transition-colors {source.id === programSourceId
+										? 'border-danger bg-panel-raised'
 										: source.id === previewSourceId
-											? 'border-green-500 bg-green-950/30'
-											: 'border-neutral-700 hover:border-neutral-500'}"
+											? 'border-live bg-panel-raised'
+											: 'border-border-dim hover:border-border'}"
 								>
 									<VideoPreview
 										sourceId={source.id}
@@ -581,16 +558,14 @@
 										<button
 											onclick={() => { previewSourceId = source.id; }}
 											disabled={source.id === programSourceId}
-											class="flex-1 rounded px-2 py-1 text-xs font-medium {source.id === previewSourceId
-												? 'bg-green-700 text-white'
-												: 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'} disabled:opacity-30"
+											class="btn flex-1 {source.id === previewSourceId ? 'btn--go' : ''}"
 										>
 											Next Up
 										</button>
 										<button
 											onclick={() => cutToSource(source.id)}
 											disabled={source.id === programSourceId}
-											class="flex-1 rounded px-2 py-1 text-xs font-bold bg-neutral-700 text-neutral-300 hover:bg-red-700 hover:text-white disabled:opacity-30"
+											class="btn btn--danger flex-1"
 										>
 											Switch
 										</button>
@@ -602,15 +577,15 @@
 
 				{:else if activeTab === 'library'}
 					{#if assets.length === 0 && stingers.length === 0}
-						<p class="text-sm text-neutral-500">No items in library. <a href="/library" class="text-blue-400 hover:underline">Add one</a></p>
+						<p class="text-amber-muted">No items in library. <a href="/library" class="text-amber hover:text-amber-bright">Add one ▸</a></p>
 					{:else}
 						{#if assets.length > 0}
 							<div class="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
 								{#each assets as asset (asset.id)}
-									<div class="flex items-center justify-between rounded-lg bg-neutral-800 p-3">
+									<div class="row">
 										<div class="min-w-0 flex-1">
-											<div class="truncate text-sm font-medium text-white">{asset.name}</div>
-											<div class="text-xs text-neutral-500">{asset.asset_type}</div>
+											<div class="truncate text-amber">{asset.name}</div>
+											<div class="label">{asset.asset_type}</div>
 										</div>
 										<div class="ml-2 flex gap-1">
 											<button
@@ -620,7 +595,7 @@
 													previewSourceId = source.id;
 													await api.setPreview(source.id).catch(() => {});
 												}}
-												class="rounded bg-neutral-700 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-600"
+												class="btn"
 											>
 												Preview
 											</button>
@@ -630,7 +605,7 @@
 													sources.set(await api.listSources());
 													await cutToSource(source.id);
 												}}
-												class="rounded bg-neutral-700 px-2 py-1 text-xs text-neutral-300 hover:bg-red-700 hover:text-white"
+												class="btn btn--danger"
 											>
 												Switch
 											</button>
@@ -643,10 +618,5 @@
 
 				{/if}
 				</div>
-			</div>
-
-
-	{#if error}
-		<p class="mt-4 text-center text-sm text-red-400">{error}</p>
-	{/if}
+			</section>
 </div>

@@ -2,13 +2,12 @@
 <script lang="ts">
 	import { api } from '$lib/api';
 	import { pipelineState, isLive, isTransitioning } from '$lib/stores/pipeline';
+	import { notify } from '$lib/notify';
 
 	let loading = $state(false);
-	let error = $state('');
 
 	async function toggle() {
 		loading = true;
-		error = '';
 		try {
 			if ($isLive) {
 				await api.stopStream();
@@ -16,23 +15,22 @@
 				await api.startStream();
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Unknown error';
+			notify.error(e);
 		} finally {
 			loading = false;
 		}
 	}
 
 	function buttonClass(): string {
-		if ($isLive) return 'bg-red-600 hover:bg-red-700';
-		if ($isTransitioning) return 'bg-yellow-600 cursor-not-allowed';
-		return 'bg-green-600 hover:bg-green-700';
+		if ($isLive) return 'btn--danger';
+		return 'btn--go';
 	}
 
 	function buttonLabel(): string {
-		if ($pipelineState.state === 'starting') return 'Starting...';
-		if ($pipelineState.state === 'stopping') return 'Stopping...';
-		if ($isLive) return 'End Stream';
-		return 'Go Live';
+		if ($pipelineState.state === 'starting') return '▸ Starting…';
+		if ($pipelineState.state === 'stopping') return '■ Stopping…';
+		if ($isLive) return '■ End Stream';
+		return '● Go Live';
 	}
 </script>
 
@@ -40,11 +38,8 @@
 	<button
 		onclick={toggle}
 		disabled={$isTransitioning || loading}
-		class="rounded-lg px-8 py-3 text-lg font-bold text-white transition-colors {buttonClass()} disabled:opacity-50"
+		class="btn {buttonClass()} min-h-12 px-8 text-[15px]"
 	>
 		{buttonLabel()}
 	</button>
-	{#if error}
-		<p class="mt-2 text-sm text-red-400">{error}</p>
-	{/if}
 </div>

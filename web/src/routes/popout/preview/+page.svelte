@@ -21,15 +21,15 @@
 
 <svelte:head><title>Preview - Muxshed</title></svelte:head>
 
-<div class="flex h-[calc(100vh-24px)] flex-col">
-	<div class="mb-2 text-xs font-semibold uppercase tracking-wide text-green-400">Preview / Next Up</div>
+<section class="panel flex h-[calc(100vh-24px)] flex-col">
+	<header class="panel__head"><span class="text-amber-dim">▮ PREVIEW / NEXT UP</span></header>
 	{#if sourceId}
 		{#key sourceId}
 			<div class="flex-1"><VideoPreview {sourceId} /></div>
 		{/key}
 	{:else}
-		<div class="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-neutral-700 bg-black">
-			<span class="text-sm text-neutral-600">No preview source selected</span>
+		<div class="scanlines-well flex flex-1 items-center justify-center border-t border-border">
+			<span class="text-amber-muted">No preview source selected</span>
 		</div>
 	{/if}
-</div>
+</section>

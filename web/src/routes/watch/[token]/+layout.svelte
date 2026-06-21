@@ -1,13 +1,13 @@
 <!-- Licensed under the Business Source License 1.1 — see LICENSE. -->
 <script lang="ts">
-	import '../../app.css';
+	import '../../../app.css';
 	let { children } = $props();
 </script>
 
 <svelte:head>
-	<title>Muxshed</title>
+	<title>Watch — Muxshed</title>
 </svelte:head>
 
-<div class="min-h-screen bg-bg p-3 font-mono text-amber-dim">
+<div class="min-h-screen bg-bg font-mono text-amber-dim">
 	{@render children()}
 </div>

@@ -4,23 +4,23 @@ import { tv, type VariantProps } from 'tailwind-variants';
 export { default as Button } from './Button.svelte';
 
 export const buttonVariants = tv({
-	base: 'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400 disabled:pointer-events-none disabled:opacity-50',
+	base: 'btn',
 	variants: {
 		variant: {
-			default: 'bg-white text-neutral-900 shadow hover:bg-neutral-200',
-			destructive: 'bg-red-600 text-white shadow-sm hover:bg-red-700',
-			outline: 'border border-neutral-700 bg-transparent text-neutral-300 hover:bg-neutral-800 hover:text-white',
-			secondary: 'bg-neutral-800 text-neutral-300 shadow-sm hover:bg-neutral-700',
-			ghost: 'text-neutral-400 hover:bg-neutral-800 hover:text-white',
-			link: 'text-blue-400 underline-offset-4 hover:underline',
-			live: 'bg-red-600 text-white shadow-sm hover:bg-red-700',
-			success: 'bg-green-600 text-white shadow-sm hover:bg-green-700',
+			default: '',
+			destructive: 'btn--danger',
+			outline: '',
+			secondary: 'btn--ghost',
+			ghost: 'btn--ghost',
+			link: 'btn--ghost',
+			live: 'btn--danger',
+			success: 'btn--go',
 		},
 		size: {
-			default: 'h-9 px-4 py-2',
-			sm: 'h-8 rounded-md px-3 text-xs',
-			lg: 'h-10 rounded-md px-8',
-			icon: 'h-9 w-9',
+			default: '',
+			sm: 'text-[11px] px-3',
+			lg: 'px-8 min-h-10',
+			icon: 'btn--icon',
 		},
 	},
 	defaultVariants: {

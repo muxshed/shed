@@ -1,7 +1,7 @@
 {
 	"name": "web",
 	"private": true,
-	"version": "0.0.1",
+	"version": "1.0.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -24,9 +24,13 @@
 		"vite": "^8.0.7"
 	},
 	"dependencies": {
+		"@fontsource/jetbrains-mono": "^5.2.8",
 		"bits-ui": "^2.17.3",
 		"clsx": "^2.1.1",
+		"dseg": "^0.46.0",
+		"hls.js": "^1.6.16",
 		"mpegts.js": "^1.8.0",
+		"svelte-sonner": "^1.1.1",
 		"tailwind-merge": "^3.5.0",
 		"tailwind-variants": "^3.2.2"
 	}

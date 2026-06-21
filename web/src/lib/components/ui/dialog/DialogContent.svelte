@@ -12,6 +12,8 @@
 	} = $props();
 </script>
 
-<div class={cn('w-full max-w-lg rounded-lg border border-neutral-700 bg-neutral-900 p-6 shadow-xl', className)}>
-	{#if children}{@render children()}{/if}
+<div class={cn('panel w-full max-w-lg', className)}>
+	<div class="panel__body">
+		{#if children}{@render children()}{/if}
+	</div>
 </div>

@@ -1,6 +1,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE.
 
 pub mod auth;
+pub mod channel_hls;
 pub mod egress;
 pub mod media_player;
 pub mod media_probe;

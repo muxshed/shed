@@ -6,6 +6,7 @@
 	import { connectWs, disconnectWs } from '$lib/ws';
 	import { hasSession, setSessionToken, clearSession, setApiKey, api } from '$lib/api';
 	import { pipelineState } from '$lib/stores/pipeline';
+	import { notify } from '$lib/notify';
 
 	let { children } = $props();
 
@@ -14,7 +15,6 @@
 
 	// Setup state
 	let setupName = $state('');
-	let setupError = $state('');
 	let setupLoading = $state(false);
 	let setupResult = $state<{ username: string; api_key: string; message: string } | null>(null);
 	let keyCopied = $state(false);
@@ -22,13 +22,32 @@
 	// Login state
 	let loginUsername = $state('');
 	let loginPassword = $state('');
-	let loginError = $state('');
 	let loginLoading = $state(false);
 
+	// Effects toggle + live clock
+	let fxOff = $state(false);
+	let now = $state(Date.now());
+
 	onMount(() => {
+		fxOff = localStorage.getItem('muxshed-fx') === 'off';
+		applyFx();
 		checkSetup();
-		return () => disconnectWs();
+		const t = setInterval(() => (now = Date.now()), 1000);
+		return () => {
+			clearInterval(t);
+			disconnectWs();
+		};
 	});
+
+	function applyFx() {
+		document.documentElement.dataset.fx = fxOff ? 'off' : '';
+	}
+
+	function toggleFx() {
+		fxOff = !fxOff;
+		localStorage.setItem('muxshed-fx', fxOff ? 'off' : 'on');
+		applyFx();
+	}
 
 	async function checkSetup() {
 		try {
@@ -57,7 +76,6 @@
 
 	async function runSetup() {
 		setupLoading = true;
-		setupError = '';
 		try {
 			const res = await fetch('/api/v1/setup/init', {
 				method: 'POST',
@@ -71,7 +89,7 @@
 			setupResult = await res.json();
 			mode = 'setup-done';
 		} catch (e) {
-			setupError = e instanceof Error ? e.message : 'Setup failed';
+			notify.error(e);
 		} finally {
 			setupLoading = false;
 		}
@@ -96,14 +114,13 @@
 
 	async function doLogin() {
 		loginLoading = true;
-		loginError = '';
 		try {
 			const result = await api.login(loginUsername, loginPassword);
 			setSessionToken(result.token);
 			mode = 'ready';
 			connectWs();
 		} catch (e) {
-			loginError = e instanceof Error ? e.message : 'Login failed';
+			notify.error(e);
 		} finally {
 			loginLoading = false;
 		}
@@ -120,7 +137,6 @@
 		mode = 'login';
 		loginUsername = '';
 		loginPassword = '';
-		loginError = '';
 	}
 
 	const nav = [
@@ -128,22 +144,46 @@
 		{ href: '/sources', label: 'Sources' },
 		{ href: '/library', label: 'Library' },
 		{ href: '/destinations', label: 'Destinations' },
+		{ href: '/channel', label: 'Channel' },
 		{ href: '/settings', label: 'Settings' },
 	];
+
+	const crumb = $derived(
+		nav.find((n) => n.href === $page.url.pathname)?.label ??
+			($page.url.pathname.slice(1).split('/')[0] || 'Studio'),
+	);
 
 	function stateLabel(state: typeof $pipelineState): string {
 		return state.state.toUpperCase();
 	}
 
-	function stateColor(state: typeof $pipelineState): string {
+	// state -> pill modifier
+	function statePill(state: typeof $pipelineState): string {
 		switch (state.state) {
-			case 'live': return 'bg-red-500';
+			case 'live':
+				return 'pill--live';
 			case 'starting':
-			case 'stopping': return 'bg-yellow-500';
-			case 'error': return 'bg-red-700';
-			default: return 'bg-neutral-600';
+			case 'stopping':
+				return 'pill--warning';
+			case 'error':
+				return 'pill--rec';
+			default:
+				return 'pill--idle';
 		}
 	}
+
+	const liveStartedAt = $derived(
+		($pipelineState as { started_at?: string }).started_at ?? null,
+	);
+
+	const elapsed = $derived.by(() => {
+		if ($pipelineState.state !== 'live' || !liveStartedAt) return '00:00:00';
+		const secs = Math.max(0, Math.floor((now - new Date(liveStartedAt).getTime()) / 1000));
+		const h = String(Math.floor(secs / 3600)).padStart(2, '0');
+		const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+		const s = String(secs % 60).padStart(2, '0');
+		return `${h}:${m}:${s}`;
+	});
 </script>
 
 <svelte:head>
@@ -152,141 +192,116 @@
 
 {#if mode === 'loading'}
 	<div class="flex min-h-screen items-center justify-center">
-		<span class="text-sm text-neutral-500">Loading...</span>
+		<span class="label animate-pulse">Booting…</span>
 	</div>
 
 {:else if mode === 'setup'}
-	<div class="flex min-h-screen items-center justify-center">
-		<div class="w-full max-w-md rounded-lg border border-neutral-700 bg-neutral-900 p-8">
-			<h1 class="mb-2 text-2xl font-bold">Welcome to Muxshed</h1>
-			<p class="mb-6 text-sm text-neutral-400">
-				Your self-hosted live production studio. Let's get set up.
-			</p>
-			<p class="mb-4 text-sm text-neutral-400">
-				This will create an admin account with default credentials. You can change your password after logging in.
-			</p>
-			<form onsubmit={(e) => { e.preventDefault(); runSetup(); }}>
-				<label class="mb-1 block text-xs font-medium text-neutral-400">Instance name (optional)</label>
-				<input
-					bind:value={setupName}
-					placeholder="e.g. My Studio"
-					class="mb-4 w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-				/>
-				<button
-					type="submit"
-					disabled={setupLoading}
-					class="w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-				>
-					{setupLoading ? 'Setting up...' : 'Set Up Muxshed'}
-				</button>
-			</form>
-			{#if setupError}
-				<p class="mt-3 text-sm text-red-400">{setupError}</p>
-			{/if}
+	<div class="flex min-h-screen items-center justify-center p-6">
+		<div class="panel w-full max-w-md">
+			<div class="panel__head">▮ First-time setup</div>
+			<div class="panel__body">
+				<h1 class="mb-2 text-lg text-amber-bright tracking-widest">WELCOME TO MUXSHED</h1>
+				<p class="mb-4 text-xs text-amber-dim leading-relaxed">
+					Your self-hosted live production studio. This creates an admin account with default
+					credentials — you can change the password after logging in.
+				</p>
+				<form onsubmit={(e) => { e.preventDefault(); runSetup(); }}>
+					<label class="field-label" for="setup-name">Instance name (optional)</label>
+					<input id="setup-name" bind:value={setupName} placeholder="e.g. My Studio" class="input mb-4" />
+					<button type="submit" disabled={setupLoading} class="btn w-full">
+						{setupLoading ? 'Setting up…' : 'Set up Muxshed'}
+					</button>
+				</form>
+			</div>
 		</div>
 	</div>
 
 {:else if mode === 'setup-done' && setupResult}
-	<div class="flex min-h-screen items-center justify-center">
-		<div class="w-full max-w-md rounded-lg border border-neutral-700 bg-neutral-900 p-8">
-			<h1 class="mb-2 text-2xl font-bold">Setup Complete</h1>
-
-			<div class="mb-4 rounded border border-neutral-700 bg-neutral-800 p-4">
-				<h2 class="mb-2 text-sm font-semibold text-neutral-300">Admin Login</h2>
-				<div class="grid grid-cols-2 gap-2 text-sm">
-					<span class="text-neutral-400">Username:</span>
-					<span class="font-mono text-white">admin</span>
-					<span class="text-neutral-400">Password:</span>
-					<span class="font-mono text-white">admin</span>
+	<div class="flex min-h-screen items-center justify-center p-6">
+		<div class="panel w-full max-w-md">
+			<div class="panel__head">▮ Setup complete</div>
+			<div class="panel__body">
+				<div class="row mb-3 flex-col items-stretch gap-2">
+					<span class="label">Admin login</span>
+					<div class="grid grid-cols-2 gap-1 text-xs">
+						<span class="text-amber-dim">Username</span><span class="text-amber-bright">admin</span>
+						<span class="text-amber-dim">Password</span><span class="text-amber-bright">admin</span>
+					</div>
+					<p class="text-[11px] text-warning">Change this password after first login.</p>
 				</div>
-				<p class="mt-2 text-xs text-yellow-400">Change this password after first login.</p>
-			</div>
 
-			<div class="mb-4 rounded border border-neutral-700 bg-neutral-800 p-4">
-				<h2 class="mb-2 text-sm font-semibold text-neutral-300">API Key (for Stream Deck / external tools)</h2>
-				<code class="block break-all text-xs text-white">{setupResult.api_key}</code>
-				<div class="mt-2">
-					<button
-						onclick={copyKey}
-						class="rounded bg-neutral-700 px-3 py-1 text-xs text-white hover:bg-neutral-600"
-					>
-						{keyCopied ? 'Copied' : 'Copy Key'}
+				<div class="row mb-3 flex-col items-stretch gap-2">
+					<span class="label">API key (Stream Deck / external tools)</span>
+					<code class="block break-all text-xs text-amber-bright">{setupResult.api_key}</code>
+					<button onclick={copyKey} class="btn btn--ghost self-start">
+						{keyCopied ? '✓ Copied' : 'Copy key'}
 					</button>
+					<p class="text-[11px] text-amber-muted">Save this key. It will not be shown again.</p>
 				</div>
-				<p class="mt-2 text-xs text-neutral-500">Save this key. It will not be shown again.</p>
-			</div>
 
-			<button
-				onclick={proceedToLogin}
-				class="w-full rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-			>
-				Continue to Login
-			</button>
+				<button onclick={proceedToLogin} class="btn btn--go w-full">Continue to login</button>
+			</div>
 		</div>
 	</div>
 
 {:else if mode === 'login'}
-	<div class="flex min-h-screen items-center justify-center">
-		<div class="w-full max-w-sm rounded-lg border border-neutral-700 bg-neutral-900 p-8">
-			<h1 class="mb-6 text-2xl font-bold">Muxshed</h1>
-			<form onsubmit={(e) => { e.preventDefault(); doLogin(); }}>
-				<label class="mb-1 block text-xs font-medium text-neutral-400">Username</label>
-				<input
-					bind:value={loginUsername}
-					type="text"
-					autocomplete="username"
-					class="mb-3 w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-				/>
-				<label class="mb-1 block text-xs font-medium text-neutral-400">Password</label>
-				<input
-					bind:value={loginPassword}
-					type="password"
-					autocomplete="current-password"
-					class="mb-4 w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-				/>
-				<button
-					type="submit"
-					disabled={loginLoading || !loginUsername || !loginPassword}
-					class="w-full rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-				>
-					{loginLoading ? 'Signing in...' : 'Sign In'}
-				</button>
-			</form>
-			{#if loginError}
-				<p class="mt-3 text-sm text-red-400">{loginError}</p>
-			{/if}
+	<div class="flex min-h-screen items-center justify-center p-6">
+		<div class="panel w-full max-w-sm">
+			<div class="panel__head">◉ Muxshed</div>
+			<div class="panel__body">
+				<form onsubmit={(e) => { e.preventDefault(); doLogin(); }}>
+					<label class="field-label" for="login-user">Username</label>
+					<input id="login-user" bind:value={loginUsername} type="text" autocomplete="username" class="input mb-3" />
+					<label class="field-label" for="login-pass">Password</label>
+					<input id="login-pass" bind:value={loginPassword} type="password" autocomplete="current-password" class="input mb-4" />
+					<button type="submit" disabled={loginLoading || !loginUsername || !loginPassword} class="btn w-full">
+						{loginLoading ? 'Signing in…' : 'Sign in'}
+					</button>
+				</form>
+			</div>
 		</div>
 	</div>
 
 {:else}
-	<div class="flex min-h-screen">
-		<nav class="flex w-48 flex-col border-r border-neutral-800 bg-neutral-900 p-4">
-			<div class="mb-6 text-lg" style="font-family: var(--font-heading); letter-spacing: -0.02em;">Muxshed</div>
-			{#each nav as item}
-				<a
-					href={item.href}
-					class="rounded px-3 py-2 text-sm transition-colors {$page.url.pathname === item.href
-						? 'bg-neutral-800 text-white'
-						: 'text-neutral-400 hover:bg-neutral-800 hover:text-white'}"
-				>
-					{item.label}
-				</a>
-			{/each}
-			<div class="mt-auto space-y-2 pt-4">
-				<div class="flex items-center gap-2 text-xs">
-					<span class="h-2 w-2 rounded-full {stateColor($pipelineState)}"></span>
-					<span class="text-neutral-400">{stateLabel($pipelineState)}</span>
-				</div>
-				<button
-					onclick={doLogout}
-					class="w-full rounded px-3 py-1.5 text-left text-xs text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
-				>
-					Sign Out
+	<div class="flex min-h-screen flex-col">
+		<!-- Status bar -->
+		<header class="flex items-center justify-between border-b border-border bg-panel-raised px-3" style="height:40px">
+			<div class="flex items-center gap-2 text-[13px]">
+				<span class="text-amber-bright tracking-widest">◉ MUXSHED</span>
+				<span class="text-amber-muted">/</span>
+				<span class="label">{crumb}</span>
+			</div>
+			<div class="flex items-center gap-3">
+				<span class="pill {statePill($pipelineState)}">
+					{$pipelineState.state === 'live' ? '● ON AIR' : `○ ${stateLabel($pipelineState)}`}
+				</span>
+				{#if $pipelineState.state === 'live'}
+					<span class="led text-[18px]">{elapsed}</span>
+				{/if}
+				<button class="btn btn--icon" onclick={toggleFx} title="Toggle screen effects" aria-label="Toggle screen effects">
+					{fxOff ? '◍' : '◉'}
 				</button>
 			</div>
-		</nav>
-		<main class="flex-1 p-6">
-			{@render children()}
-		</main>
+		</header>
+
+		<div class="flex flex-1 min-h-0">
+			<nav class="flex w-[180px] flex-col border-r border-border bg-panel py-2">
+				{#each nav as item}
+					<a href={item.href} class="rack-item {$page.url.pathname === item.href ? 'rack-item--active' : ''}">
+						<span class="text-amber-muted">▸</span>{item.label}
+					</a>
+				{/each}
+				<div class="mt-auto flex flex-col gap-1 px-3 pt-4">
+					<div class="flex items-center gap-2 text-[11px] text-amber-dim">
+						<span class="h-2 w-2 rounded-full" style="background: {$pipelineState.state === 'live' ? 'var(--color-live-glow)' : $pipelineState.state === 'error' ? 'var(--color-danger)' : 'var(--color-amber-muted)'}"></span>
+						<span>{stateLabel($pipelineState)}</span>
+					</div>
+					<button onclick={doLogout} class="btn btn--ghost justify-start px-0">Sign out</button>
+				</div>
+			</nav>
+			<main class="flex-1 overflow-y-auto p-6">
+				{@render children()}
+			</main>
+		</div>
 	</div>
 {/if}

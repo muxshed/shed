@@ -2,13 +2,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
+	import { notify } from '$lib/notify';
 	import type { ApiKey } from '$lib/types';
 
 	let keys = $state<ApiKey[]>([]);
 	let name = $state('');
 	let creating = $state(false);
 	let newKey = $state('');
-	let error = $state('');
 
 	onMount(refresh);
 
@@ -19,7 +19,6 @@
 	async function create() {
 		if (!name.trim()) return;
 		creating = true;
-		error = '';
 		newKey = '';
 		try {
 			const result = await api.createKey(name.trim(), ['read', 'control', 'admin']);
@@ -27,7 +26,7 @@
 			name = '';
 			await refresh();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to create key';
+			notify.error(e);
 		} finally {
 			creating = false;
 		}
@@ -43,67 +42,57 @@
 	}
 </script>
 
-<div class="mx-auto max-w-2xl">
-	<h1 class="mb-6 text-2xl font-bold">API Keys</h1>
-
-	<div class="mb-6 rounded-lg border border-neutral-700 bg-neutral-900 p-4">
-		<h2 class="mb-3 text-sm font-semibold text-neutral-400">Create New Key</h2>
-		<form onsubmit={(e) => { e.preventDefault(); create(); }} class="flex gap-3">
-			<input
-				bind:value={name}
-				placeholder="Key name"
-				class="flex-1 rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-			/>
-			<button
-				type="submit"
-				disabled={creating || !name.trim()}
-				class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-			>
-				Create
-			</button>
-		</form>
-		{#if error}
-			<p class="mt-2 text-sm text-red-400">{error}</p>
-		{/if}
-	</div>
+<div class="mx-auto max-w-2xl space-y-4">
+	<section class="panel">
+		<header class="panel__head">▮ Create New Key</header>
+		<div class="panel__body">
+			<form onsubmit={(e) => { e.preventDefault(); create(); }} class="flex items-end gap-3">
+				<div class="flex-1">
+					<label class="field-label" for="key-name">Key name</label>
+					<input id="key-name" bind:value={name} placeholder="e.g. Stream Deck" class="input" />
+				</div>
+				<button type="submit" disabled={creating || !name.trim()} class="btn">
+					{creating ? 'Creating…' : '+ Create'}
+				</button>
+			</form>
+		</div>
+	</section>
 
 	{#if newKey}
-		<div class="mb-6 rounded-lg border border-yellow-800 bg-yellow-950 p-4">
-			<p class="mb-2 text-sm text-yellow-300">
-				Save this key now. It will not be shown again.
-			</p>
-			<div class="flex items-center gap-2">
-				<code class="flex-1 break-all rounded bg-neutral-800 p-2 text-xs text-white">{newKey}</code>
-				<button
-					onclick={copyKey}
-					class="rounded bg-neutral-700 px-3 py-1 text-xs text-white hover:bg-neutral-600"
-				>
-					Copy
-				</button>
+		<section class="panel" style="border-color:#7A7016">
+			<header class="panel__head text-warning">▮ New Key — save it now</header>
+			<div class="panel__body space-y-2">
+				<p class="text-warning text-xs">Save this key now. It will not be shown again.</p>
+				<div class="flex items-center gap-2">
+					<code class="flex-1 break-all rounded-sm border border-border bg-well p-2 text-xs text-amber-bright">{newKey}</code>
+					<button onclick={copyKey} class="btn btn--icon" title="Copy API key" aria-label="Copy API key">⧉</button>
+				</div>
 			</div>
-		</div>
+		</section>
 	{/if}
 
-	{#if keys.length === 0}
-		<p class="text-sm text-neutral-500">No API keys.</p>
-	{:else}
-		<div class="space-y-2">
-			{#each keys as key (key.id)}
-				<div class="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 p-3">
-					<div>
-						<span class="text-sm font-medium">{key.name}</span>
-						<span class="ml-2 text-xs text-neutral-500">
-							Created {new Date(key.created_at).toLocaleDateString()}
-						</span>
-					</div>
-					<button
-						onclick={() => remove(key.id)}
-						class="rounded bg-neutral-700 px-3 py-1 text-xs text-red-400 hover:bg-neutral-600"
-					>
-						Delete
-					</button>
+	<section class="panel">
+		<header class="panel__head">▮ API Keys</header>
+		<div class="panel__body">
+			{#if keys.length === 0}
+				<p class="text-amber-muted text-xs">No API keys.</p>
+			{:else}
+				<div class="space-y-2">
+					{#each keys as key (key.id)}
+						<div class="row">
+							<div>
+								<span class="text-amber">{key.name}</span>
+								<span class="ml-2 text-xs text-amber-dim">
+									Created {new Date(key.created_at).toLocaleDateString()}
+								</span>
+							</div>
+							<button onclick={() => remove(key.id)} class="btn btn--danger" title="Delete key" aria-label="Delete API key {key.name}">
+								Delete
+							</button>
+						</div>
+					{/each}
 				</div>
-			{/each}
+			{/if}
 		</div>
-	{/if}
+	</section>
 </div>

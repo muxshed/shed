@@ -4,13 +4,23 @@
 
 	let { state }: { state: PipelineState } = $props();
 
-	function color(): string {
+	function dotStyle(): string {
 		switch (state.state) {
-			case 'live': return 'bg-red-500';
+			case 'live': return 'background: var(--color-live-glow)';
 			case 'starting':
-			case 'stopping': return 'bg-yellow-500 animate-pulse';
-			case 'error': return 'bg-red-700';
-			default: return 'bg-neutral-600';
+			case 'stopping': return 'background: var(--color-warning)';
+			case 'error': return 'background: var(--color-danger)';
+			default: return 'background: var(--color-amber-muted)';
+		}
+	}
+
+	function textClass(): string {
+		switch (state.state) {
+			case 'live': return 'text-live';
+			case 'starting':
+			case 'stopping': return 'text-warning';
+			case 'error': return 'text-danger';
+			default: return 'text-amber-dim';
 		}
 	}
 
@@ -23,6 +33,6 @@
 </script>
 
 <div class="flex items-center gap-2">
-	<span class="h-3 w-3 rounded-full {color()}"></span>
-	<span class="text-sm font-semibold tracking-wide">{label()}</span>
+	<span class="h-3 w-3 rounded-full" style={dotStyle()}></span>
+	<span class="text-[13px] font-medium tracking-[1px] uppercase {textClass()}">{label()}</span>
 </div>

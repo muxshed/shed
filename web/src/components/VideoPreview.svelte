@@ -82,9 +82,9 @@
 </script>
 
 <button
-	class="group relative aspect-video w-full overflow-hidden rounded-lg border-2 bg-black {active
-		? 'border-red-500'
-		: 'border-neutral-700 hover:border-neutral-500'}"
+	class="scanlines-well group relative aspect-video w-full overflow-hidden rounded-md border {active
+		? 'border-live'
+		: 'border-border hover:border-amber-dim'}"
 	onclick={onclick}
 >
 	<video
@@ -95,16 +95,14 @@
 	></video>
 	{#if label}
 		<div
-			class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-3 py-2"
+			class="absolute bottom-0 left-0 right-0 border-t border-border-dim bg-panel-raised px-3 py-1.5"
 		>
-			<span class="text-xs font-medium text-white">{label}</span>
+			<span class="label">{label}</span>
 		</div>
 	{/if}
 	{#if active}
-		<div
-			class="absolute top-2 right-2 rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white"
-		>
-			LIVE
+		<div class="pill pill--live absolute top-2 right-2">
+			● LIVE
 		</div>
 	{/if}
 </button>

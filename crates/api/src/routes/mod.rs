@@ -4,6 +4,7 @@ mod assets;
 mod audio;
 mod auth;
 mod broadcast;
+mod channel;
 mod delay;
 mod preview;
 mod destinations;
@@ -97,6 +98,14 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         // Output config and stats
         .route("/output/config", get(output::get_config).put(output::set_config))
         .route("/output/stats", get(output::get_stats))
+        // Public channel (HLS broadcast) config
+        .route("/channel", get(channel::get_channel).put(channel::update_channel))
+        .route("/channel/regenerate-token", post(channel::regenerate_token))
+        .route(
+            "/channel/logo",
+            post(channel::upload_logo).delete(channel::delete_logo),
+        )
+        .route("/channel/password", put(channel::set_password))
         // Broadcast config
         .route("/broadcast/config", get(broadcast::get_config).put(broadcast::set_config))
         // Audio routing
@@ -145,7 +154,13 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         .route("/library/upload", post(stingers::upload).layer(DefaultBodyLimit::max(500 * 1024 * 1024)))
         .route("/auth/login", post(auth::login))
         .route("/setup/status", get(setup::status))
-        .route("/setup/init", post(setup::init));
+        .route("/setup/init", post(setup::init))
+        // Public channel (unlisted token URL — no auth)
+        .route("/public/channel/{token}", get(channel::public_info))
+        .route("/public/channel/{token}/unlock", post(channel::unlock))
+        .route("/public/channel/{token}/index.m3u8", get(channel::serve_playlist))
+        .route("/public/channel/{token}/logo", get(channel::serve_logo))
+        .route("/public/channel/{token}/{segment}", get(channel::serve_segment));
 
     let mut router = Router::new().nest("/api/v1", api);
 

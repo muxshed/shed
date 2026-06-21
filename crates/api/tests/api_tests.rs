@@ -52,6 +52,7 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         config: Arc::new(RwLock::new(config)),
         db,
         egress: EgressManager::new(ws_tx.clone()),
+        channel_hls: muxshed_api::channel_hls::ChannelHls::new(),
         ws_tx,
         source_states: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         media_relays: tokio::sync::RwLock::new(std::collections::HashMap::new()),

@@ -18,6 +18,8 @@ This started years ago as a passion project to understand the complexities of mu
 
 - RTMP and SRT ingest from OBS, encoders, or any streaming software
 - Fan-out to YouTube, Twitch, Kick, and any custom RTMP/RTMPS endpoint
+- **Public watch page** — broadcast to your own self-hosted, unlisted `/watch/<token>`
+  page with optional viewer password and custom branding (no external destination required)
 - Scene management with multi-layer compositor
 - Stinger transitions with frame-accurate marker editing
 - Image overlays and lower thirds
@@ -26,26 +28,43 @@ This started years ago as a passion project to understand the complexities of mu
 - WebRTC guest links
 - API key authentication
 - Real-time WebSocket state feed
+- Retro "Amber Rack" broadcast UI (dark, monospace + LED readouts; see `DESIGN.md`)
 
 ### Coming Soon
 - Whip Support
 - Stream Deck and Bitfocus Companion support
 
+## Public Watch Page
+
+Every instance can broadcast its program output to a self-hosted, publicly-watchable page
+— no YouTube/Twitch required. Open the **Channel** section, set a title/logo/accent colour,
+optionally add a viewer password, and share the unlisted link (`/watch/<token>`).
+
+- Streams over HLS, produced by ffmpeg, and starts automatically when you go live.
+- The watch page has a built-in player (play/pause, mute, fullscreen, plus restart and a
+  seek bar for on-demand playback) and shows an `ON AIR` / `OFFLINE` state. It auto-starts
+  when the broadcast begins — no refresh needed.
+- The link is unlisted; add a password to restrict it further. Regenerate the link any
+  time to revoke access.
+
 ## Architecture
 
 ```
 crates/
-  api/         Axum REST + WebSocket API server
-  processor/   GStreamer pipeline management
+  api/         Axum REST + WebSocket API server; RTMP ingest/relay + ffmpeg egress/HLS
+  processor/   PipelineController trait (state) + stub controller
   common/      Shared types, config, errors
 web/           SvelteKit frontend (TypeScript, Tailwind)
 docker/        Dockerfile, compose files, Unraid template
 migrations/    SQLite migrations
 ```
 
-The API server uses a `PipelineController` trait with two implementations:
-- **StubPipelineController** for development without GStreamer (simulates state transitions)
-- **GstPipelineController** for production with full GStreamer pipeline (feature-gated)
+Media is handled by a custom Rust RTMP/FLV relay (`crates/api/src/rtmp/`, `egress.rs`)
+plus **ffmpeg** subprocesses for transcoding and HLS. RTMP fan-out is forwarded (not
+re-encoded); the public watch page is the one transcoded output (`channel_hls.rs`).
+
+> A `GstPipelineController` exists behind a `gstreamer` Cargo feature but is **not built
+> by any image** and is effectively legacy — ffmpeg is the engine that ships.
 
 ## Requirements
 
@@ -53,8 +72,7 @@ The API server uses a `PipelineController` trait with two implementations:
 
 - Rust 1.84+ and Cargo
 - Node.js 20+ and npm
-- GStreamer is **not** required for dev mode (stub controller simulates the pipeline)
-- GStreamer 1.20+ is required if you want to run the real pipeline locally (see below)
+- **ffmpeg** — required for RTMP ingest/fan-out, recording, and the public watch page (HLS)
 
 ### Docker / Podman
 
@@ -78,71 +96,26 @@ nvm install 20
 nvm use 20
 ```
 
-### GStreamer (optional, only needed for real pipeline)
+### ffmpeg
 
-Dev mode uses the stub controller and does not need GStreamer. Install GStreamer only if you want to test RTMP ingest, fan-out, and recording locally.
-
-#### macOS
-
-```sh
-brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
-```
-
-#### Ubuntu / Debian
+ffmpeg powers RTMP ingest/fan-out, recording, and the public watch page (HLS). The Docker
+images bundle it; for local development install it from your package manager:
 
 ```sh
-sudo apt-get update
-sudo apt-get install -y \
-    gstreamer1.0-tools \
-    gstreamer1.0-plugins-base \
-    gstreamer1.0-plugins-good \
-    gstreamer1.0-plugins-bad \
-    gstreamer1.0-plugins-ugly \
-    gstreamer1.0-libav \
-    gstreamer1.0-gl \
-    libgstreamer1.0-dev \
-    libgstreamer-plugins-base1.0-dev \
-    libgstreamer-plugins-bad1.0-dev \
-    pkg-config
+# macOS
+brew install ffmpeg
+
+# Ubuntu / Debian
+sudo apt-get update && sudo apt-get install -y ffmpeg
+
+# Fedora / RHEL
+sudo dnf install -y ffmpeg
+
+# Arch Linux
+sudo pacman -S ffmpeg
 ```
 
-#### Fedora / RHEL
-
-```sh
-sudo dnf install -y \
-    gstreamer1 \
-    gstreamer1-plugins-base \
-    gstreamer1-plugins-good \
-    gstreamer1-plugins-bad-free \
-    gstreamer1-plugins-ugly-free \
-    gstreamer1-libav \
-    gstreamer1-devel \
-    gstreamer1-plugins-base-devel
-```
-
-#### Arch Linux
-
-```sh
-sudo pacman -S gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
-```
-
-#### Windows
-
-Download the MSVC development and runtime installers from [gstreamer.freedesktop.org](https://gstreamer.freedesktop.org/download/). Install both, then set `PKG_CONFIG_PATH` to the GStreamer `lib/pkgconfig` directory.
-
-#### Verifying the installation
-
-```sh
-gst-launch-1.0 --version
-```
-
-#### Building with GStreamer enabled
-
-```sh
-cargo build --features muxshed-processor/gstreamer
-```
-
-Without the `gstreamer` feature flag, the API uses the stub controller (default for development).
+Verify with `ffmpeg -version`.
 
 ## Quick Start
 

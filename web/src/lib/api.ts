@@ -1,6 +1,6 @@
 // Licensed under the Business Source License 1.1 — see LICENSE.
 
-import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, RecordingState, StingerConfig, StingerAudio, DelayConfig, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User } from './types';
+import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, RecordingState, StingerConfig, StingerAudio, DelayConfig, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig } from './types';
 
 function getSessionToken(): string {
 	if (typeof window === 'undefined') return '';
@@ -290,6 +290,34 @@ export const api = {
 		request<{ id: string; name: string; token: string; url: string; created_at: string }>('/guests/invite', { method: 'POST', body: JSON.stringify({ name }) }),
 	listGuests: () => request<Guest[]>('/guests'),
 	deleteGuest: (id: string) => request<void>(`/guests/${id}`, { method: 'DELETE' }),
+
+	// Public Channel
+	getChannel: () => request<ChannelConfig>('/channel'),
+	updateChannel: (body: { enabled?: boolean; title?: string; accent?: string | null }) =>
+		request<ChannelConfig>('/channel', { method: 'PUT', body: JSON.stringify(body) }),
+	regenerateChannelToken: () =>
+		request<ChannelConfig>('/channel/regenerate-token', { method: 'POST' }),
+	setChannelPassword: (password: string | null) =>
+		request<void>('/channel/password', { method: 'PUT', body: JSON.stringify({ password }) }),
+	uploadChannelLogo: async (formData: FormData): Promise<{ logo_url: string }> => {
+		const headers: Record<string, string> = {};
+		const token = getSessionToken();
+		const apiKey = getApiKey();
+		if (token) headers['Authorization'] = `Bearer ${token}`;
+		else if (apiKey) headers['X-API-Key'] = apiKey;
+
+		const res = await fetch('/api/v1/channel/logo', {
+			method: 'POST',
+			headers,
+			body: formData,
+		});
+		if (!res.ok) {
+			const body = await res.json().catch(() => ({ error: { message: res.statusText } }));
+			throw new Error(body.error?.message || res.statusText);
+		}
+		return res.json();
+	},
+	deleteChannelLogo: () => request<void>('/channel/logo', { method: 'DELETE' }),
 
 	// API Keys
 	listKeys: () => request<ApiKey[]>('/keys'),

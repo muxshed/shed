@@ -1,4 +1,5 @@
 <!-- src/components/StatCard.svelte -->
+<!-- Licensed under the Business Source License 1.1 — see LICENSE. -->
 <script lang="ts">
   let {
     label,
@@ -12,59 +13,16 @@
     accent?: 'green' | 'purple' | 'default'
   } = $props()
 
-  const getAccentClass = () => accent !== 'default' ? `accent-${accent}` : '';
+  const borderClass = $derived(
+    accent === 'green' ? 'border-live/40' : accent === 'purple' ? 'border-amber/40' : 'border-border-dim'
+  )
+  const valueClass = $derived(accent === 'green' ? 'text-live' : 'led')
 </script>
 
-<div class={`stat-card ${getAccentClass()}`.trim()}>
-  <div class="stat-label">{label}</div>
-  <div class="stat-value">{value}</div>
+<div class="rounded-md border bg-panel-raised p-4 {borderClass}">
+  <div class="label mb-2">{label}</div>
+  <div class="text-[22px] leading-none {valueClass}">{value}</div>
   {#if subtitle}
-    <div class="stat-sub">{subtitle}</div>
+    <div class="mt-1.5 text-[11px] text-amber-muted">{subtitle}</div>
   {/if}
 </div>
-
-<style>
-  .stat-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 10px;
-    padding: 16px;
-    transition: border-color 0.15s;
-  }
-
-  .stat-card:hover {
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-
-  .stat-card.accent-purple {
-    background: rgba(60, 52, 89, 0.2);
-    border-color: rgba(90, 78, 138, 0.3);
-  }
-
-  .stat-card.accent-green {
-    background: rgba(60, 166, 67, 0.08);
-    border-color: rgba(60, 166, 67, 0.2);
-  }
-
-  .stat-label {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin-bottom: 8px;
-  }
-
-  .stat-value {
-    font-size: 22px;
-    font-weight: 700;
-    color: #f0eeff;
-    letter-spacing: -0.5px;
-    line-height: 1;
-  }
-
-  .stat-sub {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.35);
-    margin-top: 5px;
-  }
-</style>
