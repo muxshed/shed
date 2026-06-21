@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, watch, RwLock};
 use uuid::Uuid;
 
+use crate::channel_hls::ChannelHls;
 use crate::egress::EgressManager;
 
 pub struct AppState {
@@ -24,6 +25,8 @@ pub struct AppState {
     pub source_normalizers: RwLock<HashMap<Uuid, tokio::process::Child>>,
     pub srt_listeners: RwLock<HashMap<Uuid, tokio::process::Child>>,
     pub egress: EgressManager,
+    /// Public Channel HLS output (ffmpeg) for the watch page
+    pub channel_hls: ChannelHls,
     /// Program output — the channel that egress and preview-program read from
     pub program_tx: broadcast::Sender<Bytes>,
     /// Which source provides video to program

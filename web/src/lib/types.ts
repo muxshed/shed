@@ -194,6 +194,24 @@ export interface Guest {
 	created_at: string;
 }
 
+export interface ChannelConfig {
+	enabled: boolean;
+	token: string;
+	title: string;
+	logo_url: string | null;
+	accent: string | null;
+	password_protected: boolean;
+	watch_path: string;
+}
+
+export interface ChannelInfo {
+	title: string;
+	logo_url: string | null;
+	accent: string | null;
+	live: boolean;
+	requires_password: boolean;
+}
+
 export type WsEvent =
 	| { type: 'pipeline_state'; payload: PipelineState }
 	| { type: 'source_state'; payload: { id: string; state: SourceState } }

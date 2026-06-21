@@ -154,3 +154,23 @@ pub struct RecordingState {
     pub path: Option<PathBuf>,
     pub started_at: Option<DateTime<Utc>>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelConfig {
+    pub enabled: bool,
+    pub token: String,
+    pub title: String,
+    pub logo_url: Option<String>,
+    pub accent: Option<String>,
+    pub password_protected: bool,
+    pub watch_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelInfo {
+    pub title: String,
+    pub logo_url: Option<String>,
+    pub accent: Option<String>,
+    pub live: bool,
+    pub requires_password: bool,
+}

@@ -2,13 +2,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
+	import { notify } from '$lib/notify';
 	import type { User } from '$lib/types';
 
 	// Password change
 	let currentPassword = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
-	let pwError = $state('');
 	let pwSuccess = $state(false);
 	let pwLoading = $state(false);
 
@@ -17,28 +17,36 @@
 	let newUsername = $state('');
 	let newUserPassword = $state('');
 	let newUserRole = $state<'admin' | 'write' | 'read'>('read');
-	let userError = $state('');
 	let userLoading = $state(false);
 	let editingUser = $state<string | null>(null);
 	let editRole = $state('');
 
+	// Screen effects
+	let fxOff = $state(false);
+
 	onMount(async () => {
+		fxOff = localStorage.getItem('muxshed-fx') === 'off';
 		await refreshUsers();
 	});
+
+	function toggleFx() {
+		fxOff = !fxOff;
+		localStorage.setItem('muxshed-fx', fxOff ? 'off' : 'on');
+		document.documentElement.dataset.fx = fxOff ? 'off' : '';
+	}
 
 	async function refreshUsers() {
 		users = await api.listUsers();
 	}
 
 	async function changePassword() {
-		pwError = '';
 		pwSuccess = false;
 		if (newPassword.length < 6) {
-			pwError = 'Password must be at least 6 characters';
+			notify.error('Password must be at least 6 characters');
 			return;
 		}
 		if (newPassword !== confirmPassword) {
-			pwError = 'Passwords do not match';
+			notify.error('Passwords do not match');
 			return;
 		}
 		pwLoading = true;
@@ -49,16 +57,15 @@
 			newPassword = '';
 			confirmPassword = '';
 		} catch (e) {
-			pwError = e instanceof Error ? e.message : 'Failed to change password';
+			notify.error(e);
 		} finally {
 			pwLoading = false;
 		}
 	}
 
 	async function createUser() {
-		userError = '';
 		if (!newUsername.trim() || newUserPassword.length < 6) {
-			userError = 'Username required and password must be at least 6 characters';
+			notify.error('Username required and password must be at least 6 characters');
 			return;
 		}
 		userLoading = true;
@@ -68,8 +75,9 @@
 			newUserPassword = '';
 			newUserRole = 'read';
 			await refreshUsers();
+			notify.success('User created');
 		} catch (e) {
-			userError = e instanceof Error ? e.message : 'Failed to create user';
+			notify.error(e);
 		} finally {
 			userLoading = false;
 		}
@@ -81,7 +89,7 @@
 			editingUser = null;
 			await refreshUsers();
 		} catch (e) {
-			userError = e instanceof Error ? e.message : 'Failed to update user';
+			notify.error(e);
 		}
 	}
 
@@ -90,154 +98,168 @@
 			await api.deleteUser(userId);
 			await refreshUsers();
 		} catch (e) {
-			userError = e instanceof Error ? e.message : 'Failed to delete user';
+			notify.error(e);
 		}
 	}
 </script>
 
-<div class="mx-auto max-w-2xl">
-	<h1 class="mb-6 text-2xl">Settings</h1>
-
+<div class="mx-auto max-w-2xl space-y-4">
 	<!-- Change Password -->
-	<div class="mb-6 rounded-lg border border-neutral-700 bg-neutral-900 p-4">
-		<h2 class="mb-3 text-sm font-semibold text-neutral-400">Change Password</h2>
-		<form onsubmit={(e) => { e.preventDefault(); changePassword(); }} class="space-y-3">
-			<input
-				bind:value={currentPassword}
-				type="password"
-				placeholder="Current password"
-				autocomplete="current-password"
-				class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-			/>
-			<input
-				bind:value={newPassword}
-				type="password"
-				placeholder="New password (min 6 chars)"
-				autocomplete="new-password"
-				class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-			/>
-			<input
-				bind:value={confirmPassword}
-				type="password"
-				placeholder="Confirm new password"
-				autocomplete="new-password"
-				class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-			/>
-			<button
-				type="submit"
-				disabled={pwLoading}
-				class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-			>
-				{pwLoading ? 'Changing...' : 'Change Password'}
-			</button>
-		</form>
-		{#if pwError}
-			<p class="mt-2 text-sm text-red-400">{pwError}</p>
-		{/if}
-		{#if pwSuccess}
-			<p class="mt-2 text-sm text-green-400">Password changed.</p>
-		{/if}
-	</div>
+	<section class="panel">
+		<header class="panel__head">▮ Change Password</header>
+		<div class="panel__body">
+			<form onsubmit={(e) => { e.preventDefault(); changePassword(); }} class="space-y-3">
+				<div>
+					<label class="field-label" for="pw-current">Current password</label>
+					<input
+						id="pw-current"
+						bind:value={currentPassword}
+						type="password"
+						autocomplete="current-password"
+						class="input"
+					/>
+				</div>
+				<div>
+					<label class="field-label" for="pw-new">New password (min 6 chars)</label>
+					<input
+						id="pw-new"
+						bind:value={newPassword}
+						type="password"
+						autocomplete="new-password"
+						class="input"
+					/>
+				</div>
+				<div>
+					<label class="field-label" for="pw-confirm">Confirm new password</label>
+					<input
+						id="pw-confirm"
+						bind:value={confirmPassword}
+						type="password"
+						autocomplete="new-password"
+						class="input"
+					/>
+				</div>
+				<button type="submit" disabled={pwLoading} class="btn">
+					{pwLoading ? 'Changing…' : 'Change Password'}
+				</button>
+			</form>
+			{#if pwSuccess}
+				<p class="mt-2 text-live-glow text-xs">Password changed.</p>
+			{/if}
+		</div>
+	</section>
 
 	<!-- Users -->
-	<div class="mb-6 rounded-lg border border-neutral-700 bg-neutral-900 p-4">
-		<h2 class="mb-3 text-sm font-semibold text-neutral-400">Users</h2>
-
-		{#if users.length > 0}
-			<div class="mb-4 space-y-2">
-				{#each users as user (user.id)}
-					<div class="flex items-center justify-between rounded bg-neutral-800 px-3 py-2">
-						<div class="flex items-center gap-3">
-							<span class="text-sm text-white">{user.username}</span>
-							{#if editingUser === user.id}
-								<select
-									bind:value={editRole}
-									onchange={() => updateRole(user.id, editRole)}
-									class="rounded border border-neutral-600 bg-neutral-700 px-2 py-0.5 text-xs text-white"
+	<section class="panel">
+		<header class="panel__head">▮ Users</header>
+		<div class="panel__body">
+			{#if users.length > 0}
+				<div class="mb-4 space-y-2">
+					{#each users as user (user.id)}
+						<div class="row">
+							<div class="flex items-center gap-3">
+								<span class="text-amber">{user.username}</span>
+								{#if editingUser === user.id}
+									<select
+										aria-label="Role for {user.username}"
+										bind:value={editRole}
+										onchange={() => updateRole(user.id, editRole)}
+										class="select w-auto"
+									>
+										<option value="admin">Admin</option>
+										<option value="write">Write</option>
+										<option value="read">Read</option>
+									</select>
+								{:else}
+									<span class="pill pill--idle">{user.role}</span>
+								{/if}
+							</div>
+							<div class="flex gap-2">
+								<button
+									onclick={() => {
+										if (editingUser === user.id) {
+											editingUser = null;
+										} else {
+											editingUser = user.id;
+											editRole = user.role;
+										}
+									}}
+									class="btn btn--ghost"
 								>
-									<option value="admin">Admin</option>
-									<option value="write">Write</option>
-									<option value="read">Read</option>
-								</select>
-							{:else}
-								<span class="rounded bg-neutral-700 px-2 py-0.5 text-xs text-neutral-400 uppercase">{user.role}</span>
-							{/if}
+									{editingUser === user.id ? 'Cancel' : 'Edit'}
+								</button>
+								<button onclick={() => deleteUser(user.id)} class="btn btn--danger">
+									Delete
+								</button>
+							</div>
 						</div>
-						<div class="flex gap-2">
-							<button
-								onclick={() => {
-									if (editingUser === user.id) {
-										editingUser = null;
-									} else {
-										editingUser = user.id;
-										editRole = user.role;
-									}
-								}}
-								class="text-xs text-neutral-400 hover:text-white"
-							>
-								{editingUser === user.id ? 'Cancel' : 'Edit'}
-							</button>
-							<button
-								onclick={() => deleteUser(user.id)}
-								class="text-xs text-red-400 hover:text-red-300"
-							>
-								Delete
-							</button>
-						</div>
+					{/each}
+				</div>
+			{/if}
+
+			<h3 class="label mb-2">Add User</h3>
+			<form onsubmit={(e) => { e.preventDefault(); createUser(); }} class="space-y-2">
+				<div class="flex gap-2">
+					<div class="flex-1">
+						<label class="field-label" for="new-username">Username</label>
+						<input id="new-username" bind:value={newUsername} class="input" />
 					</div>
-				{/each}
-			</div>
-		{/if}
-
-		<h3 class="mb-2 text-xs font-semibold text-neutral-500">Add User</h3>
-		<form onsubmit={(e) => { e.preventDefault(); createUser(); }} class="space-y-2">
-			<div class="flex gap-2">
-				<input
-					bind:value={newUsername}
-					placeholder="Username"
-					class="flex-1 rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-				/>
-				<select
-					bind:value={newUserRole}
-					class="rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+					<div>
+						<label class="field-label" for="new-role">Role</label>
+						<select id="new-role" bind:value={newUserRole} class="select w-auto">
+							<option value="admin">Admin</option>
+							<option value="write">Write</option>
+							<option value="read">Read</option>
+						</select>
+					</div>
+				</div>
+				<div>
+					<label class="field-label" for="new-password">Password (min 6 chars)</label>
+					<input
+						id="new-password"
+						bind:value={newUserPassword}
+						type="password"
+						autocomplete="new-password"
+						class="input"
+					/>
+				</div>
+				<button
+					type="submit"
+					disabled={userLoading || !newUsername.trim() || newUserPassword.length < 6}
+					class="btn"
 				>
-					<option value="admin">Admin</option>
-					<option value="write">Write</option>
-					<option value="read">Read</option>
-				</select>
-			</div>
-			<input
-				bind:value={newUserPassword}
-				type="password"
-				placeholder="Password (min 6 chars)"
-				autocomplete="new-password"
-				class="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
-			/>
-			<button
-				type="submit"
-				disabled={userLoading || !newUsername.trim() || newUserPassword.length < 6}
-				class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-			>
-				Add User
-			</button>
-		</form>
-		{#if userError}
-			<p class="mt-2 text-sm text-red-400">{userError}</p>
-		{/if}
+					+ Add User
+				</button>
+			</form>
 
-		<div class="mt-3 rounded bg-neutral-800 p-3 text-xs text-neutral-500">
-			<p class="font-medium text-neutral-400">Roles</p>
-			<p><span class="text-white">Admin</span> -- Full access: settings, users, stream control, sources</p>
-			<p><span class="text-white">Write</span> -- Stream control: go live, switch sources, manage destinations</p>
-			<p><span class="text-white">Read</span> -- View only: monitor studio, see stats</p>
+			<div class="mt-3 rounded-sm border border-border-dim bg-panel-raised p-3 text-xs text-amber-dim">
+				<p class="label mb-1">Roles</p>
+				<p><span class="text-amber">Admin</span> — Full access: settings, users, stream control, sources</p>
+				<p><span class="text-amber">Write</span> — Stream control: go live, switch sources, manage destinations</p>
+				<p><span class="text-amber">Read</span> — View only: monitor studio, see stats</p>
+			</div>
 		</div>
-	</div>
+	</section>
+
+	<!-- Display -->
+	<section class="panel">
+		<header class="panel__head">▮ Display</header>
+		<div class="panel__body">
+			<div class="row">
+				<div>
+					<span class="text-amber">Reduce effects</span>
+					<p class="text-xs text-amber-dim">Disables scanlines, glow, and pulsing.</p>
+				</div>
+				<button onclick={toggleFx} class="btn {fxOff ? '' : 'btn--go'}">
+					{fxOff ? '○ Off' : '● On'}
+				</button>
+			</div>
+		</div>
+	</section>
 
 	<!-- API Keys -->
-	<a
-		href="/settings/keys"
-		class="block rounded-lg border border-neutral-700 bg-neutral-900 p-4 text-sm text-neutral-300 hover:bg-neutral-800"
-	>
-		Manage API Keys
+	<a href="/settings/keys" class="row hover:bg-panel-raised text-amber">
+		<span>Manage API Keys</span>
+		<span class="text-amber-muted">▸</span>
 	</a>
 </div>

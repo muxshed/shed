@@ -41,29 +41,31 @@
 
 <svelte:head><title>Sources - Muxshed</title></svelte:head>
 
-<div>
-	<div class="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Sources</div>
-	{#if liveSources().length === 0}
-		<p class="text-sm text-neutral-500">No live sources</p>
-	{:else}
-		<div class="grid gap-3 {liveSources().length <= 2 ? 'grid-cols-2' : 'grid-cols-3'}">
-			{#each liveSources() as source (source.id)}
-				<div class="rounded-lg border-2 p-2 {source.id === programId ? 'border-red-500 bg-red-950/30' : 'border-neutral-700'}">
-					<VideoPreview sourceId={source.id} label={source.name} active={source.id === programId} />
-					<div class="mt-2 flex gap-2">
-						<button
-							onclick={() => previewSource(source.id)}
-							disabled={source.id === programId}
-							class="flex-1 rounded bg-neutral-700 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-600 disabled:opacity-30"
-						>Next Up</button>
-						<button
-							onclick={() => switchSource(source.id)}
-							disabled={source.id === programId}
-							class="flex-1 rounded bg-neutral-700 px-2 py-1 text-xs text-neutral-300 hover:bg-red-700 hover:text-white disabled:opacity-30"
-						>Switch</button>
+<section class="panel">
+	<header class="panel__head">▮ SOURCES</header>
+	<div class="panel__body">
+		{#if liveSources().length === 0}
+			<p class="text-amber-muted">No live sources</p>
+		{:else}
+			<div class="grid gap-3 {liveSources().length <= 2 ? 'grid-cols-2' : 'grid-cols-3'}">
+				{#each liveSources() as source (source.id)}
+					<div class="rounded-sm border p-2 {source.id === programId ? 'border-danger bg-panel-raised' : 'border-border-dim bg-panel-raised'}">
+						<VideoPreview sourceId={source.id} label={source.name} active={source.id === programId} />
+						<div class="mt-2 flex gap-2">
+							<button
+								onclick={() => previewSource(source.id)}
+								disabled={source.id === programId}
+								class="btn flex-1"
+							>Next Up</button>
+							<button
+								onclick={() => switchSource(source.id)}
+								disabled={source.id === programId}
+								class="btn btn--danger flex-1"
+							>Switch</button>
+						</div>
 					</div>
-				</div>
-			{/each}
-		</div>
-	{/if}
-</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+</section>

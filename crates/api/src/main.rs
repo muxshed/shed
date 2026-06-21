@@ -65,6 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config: Arc::new(RwLock::new(config.clone())),
         db,
         egress: EgressManager::new(ws_tx.clone()),
+        channel_hls: muxshed_api::channel_hls::ChannelHls::new(),
         ws_tx,
         source_states: RwLock::new(std::collections::HashMap::new()),
         media_relays: RwLock::new(std::collections::HashMap::new()),

@@ -13,7 +13,7 @@
 
 {#if open}
 	<div class="fixed inset-0 z-50 flex items-center justify-center">
-		<button class="fixed inset-0 bg-black/60" onclick={() => (open = false)}></button>
+		<button class="fixed inset-0" style="background: rgba(10,7,3,0.7)" aria-label="Close dialog" onclick={() => (open = false)}></button>
 		<div class="relative z-50">
 			{#if children}{@render children()}{/if}
 		</div>

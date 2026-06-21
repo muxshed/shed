@@ -29,30 +29,25 @@
 </script>
 
 <div
-	class="rounded-lg border border-neutral-700 bg-neutral-900 p-4 {destination.enabled
+	class="rounded-md border border-border-dim bg-panel-raised p-3 {destination.enabled
 		? ''
 		: 'opacity-50'}"
 >
-	<div class="mb-2 flex items-center justify-between">
-		<span class="font-medium">{destination.name}</span>
-		<span class="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400 uppercase">
+	<div class="mb-2 flex items-center justify-between gap-2">
+		<span class="truncate text-amber">{destination.name}</span>
+		<span class="label shrink-0">
 			{destination.kind.type}
 		</span>
 	</div>
-	<div class="mb-3 truncate text-xs text-neutral-500">{displayUrl()}</div>
+	<div class="mb-3 truncate text-xs text-amber-dim">{displayUrl()}</div>
 	<div class="flex items-center gap-2">
 		<button
 			onclick={toggleEnabled}
-			class="rounded px-3 py-1 text-xs {destination.enabled
-				? 'bg-green-900 text-green-400'
-				: 'bg-neutral-700 text-neutral-400'} hover:opacity-80"
+			class="pill {destination.enabled ? 'pill--live' : 'pill--idle'} cursor-pointer"
 		>
-			{destination.enabled ? 'Enabled' : 'Disabled'}
+			{destination.enabled ? '● Enabled' : '○ Disabled'}
 		</button>
-		<button
-			onclick={remove}
-			class="rounded bg-neutral-700 px-3 py-1 text-xs text-red-400 hover:bg-neutral-600"
-		>
+		<button onclick={remove} class="btn btn--danger">
 			Delete
 		</button>
 	</div>

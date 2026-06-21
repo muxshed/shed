@@ -87,19 +87,12 @@ pub async fn start(
         rows.into_iter().map(|r| r.into_destination()).collect::<Vec<_>>()
     };
 
+    // No external (RTMP/SRT) destinations are required to go live: the public Channel
+    // watch page is always an available output, so the program can always be broadcast
+    // somewhere. An empty destination list is valid — the pipeline still produces the
+    // program output (and the channel HLS, when enabled).
     if destinations.is_empty() {
-        let total: i32 = sqlx::query_scalar("SELECT COUNT(*) FROM destinations")
-            .fetch_one(&state.db)
-            .await
-            .unwrap_or(0);
-        let msg = if total == 0 {
-            "no destinations configured — add one in Destinations page".to_string()
-        } else if !saved_config.destination_ids.is_empty() {
-            format!("none of the {} selected destinations are enabled", saved_config.destination_ids.len())
-        } else {
-            "no enabled destinations — enable at least one in Destinations page".to_string()
-        };
-        return Err(MuxshedError::BadRequest(msg).into());
+        tracing::info!("going live with no external destinations — channel/watch page output only");
     }
 
     tracing::info!("going live: source={}, destinations={}", source_id, destinations.len());
@@ -154,6 +147,10 @@ pub async fn start(
 
     state.pipeline.start(destinations).await?;
 
+    // Start the public Channel HLS output (ffmpeg) if the channel is enabled, so the
+    // watch page goes live as soon as the studio goes on air.
+    ensure_channel_hls(&state).await;
+
     if let Some(scene_id) = saved_config.scene_id {
         let _ = state.pipeline.activate_scene(&scene_id).await;
     }
@@ -168,11 +165,63 @@ pub async fn stop(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiE
     }
 
     state.egress.stop().await;
+    state.channel_hls.stop().await;
     let _ = state.program_source.send(None);
     let _ = state.pipeline.stop_recording().await;
     state.pipeline.stop().await?;
 
     Ok(StatusCode::OK)
+}
+
+/// Start or stop the public Channel HLS output to match the channel's `enabled` flag
+/// and whether the studio is currently broadcasting. Safe to call on go-live and
+/// whenever the channel config (enabled/token) changes.
+pub async fn ensure_channel_hls(state: &Arc<AppState>) {
+    let row = sqlx::query_as::<_, (i64, String)>("SELECT enabled, token FROM channel WHERE id = 1")
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    let broadcasting = !matches!(
+        state.pipeline.state().await,
+        PipelineState::Idle | PipelineState::Stopping
+    );
+
+    match row {
+        Some((enabled, token)) if enabled != 0 && broadcasting => {
+            let data_dir = state.config.read().await.data_dir.clone();
+            let output_config = load_output_config(state).await;
+            let program_source = *state.program_source.borrow();
+            let seq_headers = match program_source {
+                Some(id) => state.sequence_headers.read().await.get(&id).cloned(),
+                None => None,
+            };
+            if let Err(e) = state
+                .channel_hls
+                .start(
+                    &token,
+                    &data_dir,
+                    state.program_tx.clone(),
+                    output_config,
+                    seq_headers,
+                )
+                .await
+            {
+                tracing::warn!("channel HLS start failed: {}", e);
+            }
+        }
+        _ => state.channel_hls.stop().await,
+    }
+}
+
+async fn load_output_config(state: &Arc<AppState>) -> Option<crate::routes::output::OutputConfig> {
+    sqlx::query_as::<_, (String,)>("SELECT value FROM settings WHERE key = 'output_config'")
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|(json,)| serde_json::from_str(&json).ok())
 }
 
 #[derive(sqlx::FromRow)]

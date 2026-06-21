@@ -21,15 +21,15 @@
 
 <svelte:head><title>Program - Muxshed</title></svelte:head>
 
-<div class="flex h-[calc(100vh-24px)] flex-col">
-	<div class="mb-2 text-xs font-semibold uppercase tracking-wide text-red-400">Program Output</div>
+<section class="panel flex h-[calc(100vh-24px)] flex-col">
+	<header class="panel__head"><span class="text-danger-glow">▮ PROGRAM</span></header>
 	{#if sourceId}
 		{#key sourceId}
 			<div class="flex-1"><VideoPreview {sourceId} active={true} /></div>
 		{/key}
 	{:else}
-		<div class="flex flex-1 items-center justify-center rounded-lg border-2 border-red-900 bg-black">
-			<span class="text-sm text-neutral-600">Waiting for program source...</span>
+		<div class="scanlines-well flex flex-1 items-center justify-center border-t border-border">
+			<span class="text-amber-muted">Waiting for program source…</span>
 		</div>
 	{/if}
-</div>
+</section>

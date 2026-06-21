@@ -49,37 +49,38 @@
 
 <svelte:head><title>Audio - Muxshed</title></svelte:head>
 
-<div>
-	<div class="mb-3 flex items-center justify-between">
-		<span class="text-xs font-semibold uppercase tracking-wide text-neutral-400">Audio Mixer</span>
+<section class="panel">
+	<header class="panel__head">
+		<span>▮ AUDIO MIXER</span>
 		<button
 			onclick={toggleFollows}
-			class="rounded px-2 py-0.5 text-xs {audioRouting.audio_follows_video ? 'bg-green-900 text-green-400' : 'bg-neutral-700 text-neutral-400'}"
+			class="btn {audioRouting.audio_follows_video ? 'btn--go' : ''}"
+			style="min-height:24px;padding:2px 8px"
 		>
-			{audioRouting.audio_follows_video ? 'Follows video' : 'Independent'}
+			{audioRouting.audio_follows_video ? 'Follows Video' : 'Independent'}
 		</button>
-	</div>
-	<div class="space-y-2">
+	</header>
+	<div class="panel__body space-y-2">
 		{#each liveSources() as source (source.id)}
 			{@const isActive = audioRouting.audio_follows_video ? source.id === programId : source.id === audioRouting.active_audio_source}
 			<button
 				onclick={() => setAudioSource(source.id)}
 				disabled={audioRouting.audio_follows_video}
-				class="flex w-full items-center gap-3 rounded px-4 py-3 text-left {isActive ? 'bg-green-950 ring-1 ring-green-600' : 'bg-neutral-800'} disabled:cursor-default"
+				class="row w-full text-left {isActive ? 'border-live' : ''} disabled:cursor-default"
 			>
-				<div class="flex h-6 w-16 items-end gap-px">
+				<div class="scanlines-well flex h-6 w-16 items-end gap-px border border-border-dim p-px">
 					{#each Array(10) as _, i}
 						<div
-							class="w-1 rounded-sm {isActive ? (i < 7 ? 'bg-green-500' : i < 9 ? 'bg-yellow-500' : 'bg-red-500') : 'bg-neutral-700'}"
-							style="height: {isActive ? Math.max(20, Math.random() * 100) : 20}%"
+							class="w-1 {isActive ? (i < 7 ? 'bg-live' : i < 9 ? 'bg-warning' : 'bg-danger') : 'bg-border-dim'}"
+							style="height: {isActive ? Math.max(20, Math.random() * 100) : 12}%"
 						></div>
 					{/each}
 				</div>
-				<span class="flex-1 text-sm {isActive ? 'text-white' : 'text-neutral-400'}">{source.name}</span>
+				<span class="flex-1 {isActive ? 'text-amber-bright' : 'text-amber-dim'}">{source.name}</span>
 				{#if isActive}
-					<span class="rounded bg-green-900 px-1.5 py-0.5 text-xs text-green-400">ACTIVE</span>
+					<span class="pill pill--live">● ACTIVE</span>
 				{/if}
 			</button>
 		{/each}
 	</div>
-</div>
+</section>
