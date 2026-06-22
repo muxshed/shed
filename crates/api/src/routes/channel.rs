@@ -365,16 +365,16 @@ pub async fn unlock(
         .unwrap()
 }
 
-/// Returns Some(()) if access is allowed, or an error Response if the cookie gate fails.
-fn check_cookie(row: &ChannelRow, headers: &HeaderMap) -> Result<(), Response> {
+/// Returns `Some(response)` if the password-cookie gate blocks access, or `None` if allowed.
+fn check_cookie(row: &ChannelRow, headers: &HeaderMap) -> Option<Response> {
     if let Some(hash) = row.password_hash.as_ref() {
         let cookie_name = format!("mxs_watch_{}", row.token);
         let expected = watch_cookie_value(hash, &row.token);
         if !cookie_present(headers, &cookie_name, &expected) {
-            return Err(status(StatusCode::FORBIDDEN));
+            return Some(status(StatusCode::FORBIDDEN));
         }
     }
-    Ok(())
+    None
 }
 
 pub async fn serve_playlist(
@@ -388,7 +388,7 @@ pub async fn serve_playlist(
         Err(e) => return e.into_response(),
     };
 
-    if let Err(resp) = check_cookie(&row, &headers) {
+    if let Some(resp) = check_cookie(&row, &headers) {
         return resp;
     }
 
@@ -418,7 +418,7 @@ pub async fn serve_segment(
         Err(e) => return e.into_response(),
     };
 
-    if let Err(resp) = check_cookie(&row, &headers) {
+    if let Some(resp) = check_cookie(&row, &headers) {
         return resp;
     }
 
