@@ -135,32 +135,66 @@ pub async fn public_info(
 
 /// WHIP endpoint — a guest publishes their camera/mic here over WebRTC.
 ///
-/// The WebRTC media path (webrtc-rs peer → RTP → ffmpeg → Source) is the next
-/// focused build; see `docs/guests-webrtc.md`. For now this validates the token
-/// and reports that ingest is not yet enabled so the join page can degrade
-/// gracefully. The route and contract are stable.
+/// Creates an ephemeral `web_rtc` Source for the guest, terminates the peer, and
+/// bridges the guest's RTP into the media relay via FFmpeg (see
+/// `crate::guest_webrtc`). Returns the SDP answer per the WHIP spec. The live
+/// media path is verifiable only against a real browser; see `docs/guests-webrtc.md`.
 pub async fn whip(
     State(state): State<Arc<AppState>>,
     Path(token): Path<String>,
-    _offer: String,
+    offer: String,
 ) -> Response {
-    let exists = sqlx::query_as::<_, (String,)>("SELECT id FROM guests WHERE token = ?")
+    let guest = sqlx::query_as::<_, (String,)>("SELECT name FROM guests WHERE token = ?")
         .bind(&token)
         .fetch_optional(&state.db)
         .await
         .ok()
         .flatten();
 
-    if exists.is_none() {
+    let Some((name,)) = guest else {
         return (StatusCode::NOT_FOUND, "guest link not found").into_response();
+    };
+
+    // Ephemeral source row so the guest appears in the switcher while connected.
+    let source_id = Uuid::new_v4();
+    let kind = muxshed_common::SourceKind::WebRtc {
+        token: token.clone(),
+    };
+    let kind_json = match serde_json::to_string(&kind) {
+        Ok(j) => j,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
+
+    if sqlx::query("INSERT INTO sources (id, name, kind) VALUES (?, ?, ?)")
+        .bind(source_id.to_string())
+        .bind(format!("{} (guest)", name))
+        .bind(&kind_json)
+        .execute(&state.db)
+        .await
+        .is_err()
+    {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "could not create source").into_response();
     }
 
-    (
-        StatusCode::SERVICE_UNAVAILABLE,
-        [(header::CONTENT_TYPE, "application/json")],
-        r#"{"error":{"code":"WEBRTC_NOT_READY","message":"WebRTC guest ingest is not yet enabled in this build"}}"#,
-    )
-        .into_response()
+    let _ = sqlx::query("UPDATE guests SET status = 'connecting', source_id = ? WHERE token = ?")
+        .bind(source_id.to_string())
+        .bind(&token)
+        .execute(&state.db)
+        .await;
+
+    match crate::guest_webrtc::start_guest_ingest(state.clone(), source_id, offer).await {
+        Ok(answer) => Response::builder()
+            .status(StatusCode::CREATED)
+            .header(header::CONTENT_TYPE, "application/sdp")
+            .header(header::LOCATION, format!("/api/v1/guest/{}/whip", token))
+            .body(axum::body::Body::from(answer))
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+        Err(e) => {
+            tracing::warn!("guest ingest failed for {}: {}", source_id, e);
+            crate::guest_webrtc::stop_guest_ingest(&state, &source_id).await;
+            (StatusCode::BAD_REQUEST, format!("could not start ingest: {}", e)).into_response()
+        }
+    }
 }
 
 fn generate_token() -> String {

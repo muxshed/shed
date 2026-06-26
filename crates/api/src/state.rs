@@ -24,6 +24,8 @@ pub struct AppState {
     pub media_players: RwLock<HashMap<Uuid, tokio::process::Child>>,
     pub source_normalizers: RwLock<HashMap<Uuid, tokio::process::Child>>,
     pub srt_listeners: RwLock<HashMap<Uuid, tokio::process::Child>>,
+    /// Live WebRTC guest peer connections, kept alive while the guest is connected
+    pub guest_peers: RwLock<HashMap<Uuid, Arc<webrtc::peer_connection::RTCPeerConnection>>>,
     pub egress: EgressManager,
     /// Public Channel HLS output (ffmpeg) for the watch page
     pub channel_hls: ChannelHls,

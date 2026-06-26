@@ -74,6 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         media_players: RwLock::new(std::collections::HashMap::new()),
         source_normalizers: RwLock::new(std::collections::HashMap::new()),
         srt_listeners: RwLock::new(std::collections::HashMap::new()),
+        guest_peers: RwLock::new(std::collections::HashMap::new()),
         program_tx,
         program_source: program_source_tx,
         preview_source: RwLock::new(None),
