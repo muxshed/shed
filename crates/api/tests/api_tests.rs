@@ -643,6 +643,9 @@ async fn test_guest_public_info() {
     let info = response_json(resp).await;
     assert_eq!(info["name"], "Sam");
     assert_eq!(info["status"], "invited");
+    // The join page receives ICE servers matching the server peer.
+    assert!(info["ice_servers"].is_array());
+    assert!(!info["ice_servers"].as_array().unwrap().is_empty());
 
     // Unknown token → 404.
     let req = Request::builder()
@@ -679,6 +682,40 @@ async fn test_guest_whip_malformed_offer() {
     // A malformed SDP offer is rejected during negotiation; the ephemeral
     // source is rolled back.
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_webrtc_config_default_and_update() {
+    let (app, key, _s) = setup().await;
+
+    // Default config exposes at least one (STUN) ICE server.
+    let resp = app
+        .clone()
+        .oneshot(json_request("GET", "/api/v1/webrtc/config", &key, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let cfg = response_json(resp).await;
+    assert!(!cfg["ice_servers"].as_array().unwrap().is_empty());
+
+    // Add a TURN server and read it back.
+    let body = r#"{"ice_servers":[{"urls":["stun:stun.l.google.com:19302"]},{"urls":["turn:turn.example.com:3478"],"username":"u","credential":"p"}]}"#;
+    let resp = app
+        .clone()
+        .oneshot(json_request("PUT", "/api/v1/webrtc/config", &key, Some(body)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let resp = app
+        .oneshot(json_request("GET", "/api/v1/webrtc/config", &key, None))
+        .await
+        .unwrap();
+    let cfg = response_json(resp).await;
+    let servers = cfg["ice_servers"].as_array().unwrap();
+    assert_eq!(servers.len(), 2);
+    assert_eq!(servers[1]["urls"][0], "turn:turn.example.com:3478");
+    assert_eq!(servers[1]["username"], "u");
 }
 
 #[tokio::test]

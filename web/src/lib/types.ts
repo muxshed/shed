@@ -155,6 +155,16 @@ export interface OutputConfig {
 	fps: number;
 }
 
+export interface IceServer {
+	urls: string[];
+	username?: string;
+	credential?: string;
+}
+
+export interface WebrtcConfig {
+	ice_servers: IceServer[];
+}
+
 export interface OutputStats {
 	bytes_sent: number;
 	duration_secs: number;
