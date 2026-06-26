@@ -1,45 +1,51 @@
 # Guests — WebRTC (WHIP) ingest
 
-Status: **foundation shipped; media core is the next focused build.**
+Status: **implemented** (`webrtc` crate 0.11). The live media path is verifiable only
+against a real browser — see the verification note.
 
 Guests join via an unguessable invite link, allow camera/mic in the browser, and
 **WHIP-publish** their stream to the instance. The published media becomes a normal
 **Source** the switcher can cut to — so guests work with everything that already exists
 (scenes, overlays, delay, recording, fan-out).
 
-## What ships today
+## What ships
 
 - **Invite lifecycle** (`crates/api/src/routes/guests.rs`): create / list / delete invites
-  (operator, authed) + a `status` column (`invited` → `connected`) and a `source_id` link.
+  (operator, authed) + a `status` column (`invited` → `connecting` → `connected` → `left`)
+  and a `source_id` link.
 - **Public, token-scoped endpoints** (no auth):
   - `GET /api/v1/guest/{token}` — validate a link, return `{ name, status }`.
-  - `POST /api/v1/guest/{token}/whip` — the WHIP endpoint (see below).
+  - `POST /api/v1/guest/{token}/whip` — WHIP: takes the SDP offer, returns the SDP answer
+    (`201 Created`, `Content-Type: application/sdp`, `Location` header). Malformed offers
+    are rejected `400` and the ephemeral source is rolled back.
+- **The bridge** (`crates/api/src/guest_webrtc.rs`):
+  1. `webrtc-rs` peer (MediaEngine pinned to **VP8 + Opus**), `set_remote_description` →
+     `create_answer` → ICE gather → answer.
+  2. `on_track` reads RTP, rewrites the payload type to fixed values (VP8 96 / Opus 111),
+     and forwards to local UDP ports.
+  3. An **ffmpeg** subprocess reads those ports via a generated SDP
+     (`-protocol_whitelist file,crypto,data,rtp,udp`), normalizes to the output canvas
+     (libx264 + AAC), and feeds FLV into the source's `media_relays` channel — exactly the
+     path `source_normalizer.rs` / `srt.rs` use. Source goes **Live** on the first frame.
+  4. On peer disconnect (or source delete) `stop_guest_ingest` kills ffmpeg, closes the
+     peer, drops the ephemeral source row, clears the relay/headers, and resets the guest
+     to `left`. `SourceState` WS events fire throughout.
 - **Guest join page** (`web/src/routes/guest/[token]`): validates the link, previews
-  camera/mic, builds a real `RTCPeerConnection` offer and POSTs it to the WHIP endpoint.
-  It degrades gracefully while ingest is being built (a `503` shows "coming soon").
+  camera/mic, builds the WHIP offer, applies the answer.
 - **Guests admin page** (`web/src/routes/(app)/guests`): invite, copy link, see status,
   delete.
-- Integration tests cover invite/list/delete, public info (+404), and the WHIP contract.
+- Integration tests cover invite/list/delete, public info (+404), and the WHIP contract
+  (unknown token → 404, malformed offer → 400 with rollback).
 
-The WHIP endpoint currently validates the token and returns `503 WEBRTC_NOT_READY`.
+## Not yet done
 
-## The media core (to build)
-
-Engine reality: Muxshed runs on **ffmpeg + the Rust RTMP relay** (no GStreamer). So:
-
-1. **WHIP handshake** — accept the SDP offer at `POST /guest/{token}/whip`, create a
-   `webrtc-rs` (`webrtc` crate) or `str0m` peer connection with a recvonly video + audio
-   transceiver, set the remote description, create the answer, gather ICE, and return the
-   SDP answer (`201 Created`, `Content-Type: application/sdp`, `Location` header per WHIP).
-2. **Media → Source** — `on_track`: read the guest's RTP (VP8/VP9/H.264 + Opus),
-   depacketize, and pipe into an **ffmpeg** subprocess that remuxes/transcodes to the
-   instance's program format (FLV/H.264 + AAC), then register it as a Source feeding the
-   existing `media_relays` / `program_tx` path (mirror `source_normalizer.rs`).
-3. **Lifecycle** — on connect set `guests.status = 'connected'` and store `source_id`; on
-   disconnect tear the source down and set `status = 'left'`. Emit `SourceState` WS events
-   so the switcher and Companion module light up.
-4. **TURN** — guests behind strict NAT need a TURN relay. Document an optional bundled
-   `coturn`; advertise its ICE servers in the answer. LAN guests work with STUN only.
+- **TURN** — guests behind strict NAT need a TURN relay. Today only a public STUN server is
+  advertised, so LAN/same-network guests connect but off-LAN guests behind symmetric NAT
+  may not. Next: document/bundle an optional `coturn` and advertise its ICE servers.
+- **Codec breadth** — pinned to VP8 + Opus for a deterministic ffmpeg SDP. H.264 guests
+  would need dynamic SDP/PT handling.
+- ffmpeg in the runtime image must have the **VP8 decoder** (libvpx) and **libx264** — both
+  are present in the standard Ubuntu ffmpeg the Docker image installs.
 
 ## Why this shape
 
