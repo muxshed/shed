@@ -1,4 +1,4 @@
-// Licensed under the Business Source License 1.1 — see LICENSE.
+// Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
 import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, RecordingState, StingerConfig, StingerAudio, DelayConfig, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig } from './types';
 

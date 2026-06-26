@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Licensed under the Business Source License 1.1 — see LICENSE.
+# Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
 # Run Muxshed locally from source.
 # API on :8080, frontend dev server on :5173 with proxy to API.

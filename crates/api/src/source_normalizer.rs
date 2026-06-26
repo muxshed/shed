@@ -1,4 +1,4 @@
-// Licensed under the Business Source License 1.1 — see LICENSE.
+// Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
 //! Normalizes RTMP source input to a consistent output canvas resolution.
 //! Each source gets its own FFmpeg process: raw FLV in -> normalized FLV out.

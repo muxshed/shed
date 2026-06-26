@@ -1,5 +1,5 @@
 <!-- src/components/StatCard.svelte -->
-<!-- Licensed under the Business Source License 1.1 — see LICENSE. -->
+<!-- Licensed under the GNU Affero General Public License v3.0 — see LICENSE. -->
 <script lang="ts">
   let {
     label,

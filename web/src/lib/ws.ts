@@ -1,4 +1,4 @@
-// Licensed under the Business Source License 1.1 — see LICENSE.
+// Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
 import { pipelineState, sources, destinations, recordingState } from './stores/pipeline';
 import type { WsEvent } from './types';
