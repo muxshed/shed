@@ -144,12 +144,6 @@ pub async fn delete(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-    // Stop any running listener/player before deleting
-    if let Ok(uid) = id.parse::<Uuid>() {
-        crate::srt::stop_srt_listener(&state, &uid).await;
-        crate::media_player::stop_media_playback(&state, &uid).await;
-    }
-
     let result = sqlx::query("DELETE FROM sources WHERE id = ?")
         .bind(&id)
         .execute(&state.db)
@@ -157,6 +151,13 @@ pub async fn delete(
 
     if result.rows_affected() == 0 {
         return Err(MuxshedError::NotFound(format!("source {}", id)).into());
+    }
+
+    // Tear down any running listener/player/guest peer for this source.
+    if let Ok(uid) = id.parse::<Uuid>() {
+        crate::srt::stop_srt_listener(&state, &uid).await;
+        crate::media_player::stop_media_playback(&state, &uid).await;
+        crate::guest_webrtc::stop_guest_ingest(&state, &uid).await;
     }
 
     Ok(StatusCode::NO_CONTENT)
