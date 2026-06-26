@@ -287,7 +287,7 @@ export const api = {
 
 	// Guests
 	inviteGuest: (name: string) =>
-		request<{ id: string; name: string; token: string; url: string; created_at: string }>('/guests/invite', { method: 'POST', body: JSON.stringify({ name }) }),
+		request<{ id: string; name: string; token: string; url: string; status: string; created_at: string }>('/guests/invite', { method: 'POST', body: JSON.stringify({ name }) }),
 	listGuests: () => request<Guest[]>('/guests'),
 	deleteGuest: (id: string) => request<void>(`/guests/${id}`, { method: 'DELETE' }),
 

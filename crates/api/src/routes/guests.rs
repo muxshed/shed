@@ -1,7 +1,8 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{header, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -22,6 +23,7 @@ pub struct GuestResponse {
     pub name: String,
     pub token: String,
     pub url: String,
+    pub status: String,
     pub created_at: String,
 }
 
@@ -29,52 +31,65 @@ pub struct GuestResponse {
 pub struct GuestListItem {
     pub id: String,
     pub name: String,
+    pub token: String,
+    pub status: String,
     pub created_at: String,
 }
+
+/// Public, token-scoped info for the guest join page (no auth).
+#[derive(Serialize)]
+pub struct GuestInfo {
+    pub name: String,
+    pub status: String,
+}
+
+// ── Authenticated (operator) ──────────────────────────────────────────────────
 
 pub async fn invite(
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreateGuest>,
 ) -> Result<(StatusCode, Json<GuestResponse>), ApiError> {
+    if body.name.trim().is_empty() {
+        return Err(MuxshedError::BadRequest("guest name is required".to_string()).into());
+    }
     let id = Uuid::new_v4();
     let token = generate_token();
 
     sqlx::query("INSERT INTO guests (id, name, token) VALUES (?, ?, ?)")
         .bind(id.to_string())
-        .bind(&body.name)
+        .bind(body.name.trim())
         .bind(&token)
         .execute(&state.db)
         .await?;
 
-    let url = format!("/guest?token={}", token);
-
-    let row = sqlx::query_as::<_, GuestRow>("SELECT id, name, token, created_at FROM guests WHERE id = ?")
-        .bind(id.to_string())
-        .fetch_one(&state.db)
-        .await?;
-
+    let row = fetch_row(&state, &id.to_string()).await?;
     Ok((
         StatusCode::CREATED,
         Json(GuestResponse {
+            url: format!("/guest/{}", row.token),
             id: row.id,
             name: row.name,
             token: row.token,
-            url,
+            status: row.status,
             created_at: row.created_at,
         }),
     ))
 }
 
 pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<GuestListItem>>, ApiError> {
-    let rows = sqlx::query_as::<_, GuestRow>("SELECT id, name, token, created_at FROM guests")
-        .fetch_all(&state.db)
-        .await?;
+    let rows = sqlx::query_as::<_, GuestRow>(
+        "SELECT id, name, token, status, created_at FROM guests ORDER BY created_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await?;
 
     Ok(Json(
         rows.into_iter()
             .map(|r| GuestListItem {
                 id: r.id,
                 name: r.name,
+                token: r.token,
+                status: r.status,
                 created_at: r.created_at,
             })
             .collect(),
@@ -97,6 +112,57 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+// ── Public (guest, by token) ──────────────────────────────────────────────────
+
+/// Validate a guest link and return its name + status for the join page.
+pub async fn public_info(
+    State(state): State<Arc<AppState>>,
+    Path(token): Path<String>,
+) -> Result<Json<GuestInfo>, ApiError> {
+    let row = sqlx::query_as::<_, (String, String)>(
+        "SELECT name, status FROM guests WHERE token = ?",
+    )
+    .bind(&token)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| MuxshedError::NotFound("guest link not found".to_string()))?;
+
+    Ok(Json(GuestInfo {
+        name: row.0,
+        status: row.1,
+    }))
+}
+
+/// WHIP endpoint — a guest publishes their camera/mic here over WebRTC.
+///
+/// The WebRTC media path (webrtc-rs peer → RTP → ffmpeg → Source) is the next
+/// focused build; see `docs/guests-webrtc.md`. For now this validates the token
+/// and reports that ingest is not yet enabled so the join page can degrade
+/// gracefully. The route and contract are stable.
+pub async fn whip(
+    State(state): State<Arc<AppState>>,
+    Path(token): Path<String>,
+    _offer: String,
+) -> Response {
+    let exists = sqlx::query_as::<_, (String,)>("SELECT id FROM guests WHERE token = ?")
+        .bind(&token)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    if exists.is_none() {
+        return (StatusCode::NOT_FOUND, "guest link not found").into_response();
+    }
+
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        [(header::CONTENT_TYPE, "application/json")],
+        r#"{"error":{"code":"WEBRTC_NOT_READY","message":"WebRTC guest ingest is not yet enabled in this build"}}"#,
+    )
+        .into_response()
+}
+
 fn generate_token() -> String {
     use rand::Rng;
     let mut rng = rand::rng();
@@ -112,10 +178,21 @@ fn generate_token() -> String {
         .collect()
 }
 
+async fn fetch_row(state: &AppState, id: &str) -> Result<GuestRow, ApiError> {
+    let row = sqlx::query_as::<_, GuestRow>(
+        "SELECT id, name, token, status, created_at FROM guests WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_one(&state.db)
+    .await?;
+    Ok(row)
+}
+
 #[derive(sqlx::FromRow)]
 struct GuestRow {
     id: String,
     name: String,
     token: String,
+    status: String,
     created_at: String,
 }

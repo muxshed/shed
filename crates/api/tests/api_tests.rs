@@ -434,8 +434,9 @@ async fn test_guest_invite() {
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
     let body = response_json(resp).await;
-    assert!(!body["token"].as_str().unwrap().is_empty());
-    assert!(body["url"].as_str().unwrap().contains("token="));
+    let token = body["token"].as_str().unwrap();
+    assert!(!token.is_empty());
+    assert_eq!(body["url"], format!("/guest/{}", token));
 
     // List
     let req = json_request("GET", "/api/v1/guests", &key, None);
@@ -570,5 +571,140 @@ async fn test_not_found_responses() {
 
     let req = json_request("GET", &format!("/api/v1/stingers/{}", fake_id), &key, None);
     let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+// --- Guest tests ---
+
+async fn invite_guest(app: &axum::Router, key: &str, name: &str) -> serde_json::Value {
+    let req = json_request(
+        "POST",
+        "/api/v1/guests/invite",
+        key,
+        Some(&format!("{{\"name\":\"{}\"}}", name)),
+    );
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    response_json(resp).await
+}
+
+#[tokio::test]
+async fn test_guest_invite_and_list() {
+    let (app, key, _s) = setup().await;
+    let body = invite_guest(&app, &key, "Alex").await;
+    assert_eq!(body["name"], "Alex");
+    assert_eq!(body["status"], "invited");
+    let token = body["token"].as_str().unwrap();
+    assert!(!token.is_empty());
+    assert_eq!(body["url"], format!("/guest/{}", token));
+
+    let resp = app
+        .clone()
+        .oneshot(json_request("GET", "/api/v1/guests", &key, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let list = response_json(resp).await;
+    let arr = list.as_array().unwrap();
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["name"], "Alex");
+    assert_eq!(arr[0]["status"], "invited");
+}
+
+#[tokio::test]
+async fn test_guest_invite_requires_name() {
+    let (app, key, _s) = setup().await;
+    let resp = app
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/guests/invite",
+            &key,
+            Some("{\"name\":\"   \"}"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_guest_public_info() {
+    let (app, key, _s) = setup().await;
+    let body = invite_guest(&app, &key, "Sam").await;
+    let token = body["token"].as_str().unwrap().to_string();
+
+    // Public — no API key required.
+    let req = Request::builder()
+        .uri(format!("/api/v1/guest/{}", token))
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let info = response_json(resp).await;
+    assert_eq!(info["name"], "Sam");
+    assert_eq!(info["status"], "invited");
+
+    // Unknown token → 404.
+    let req = Request::builder()
+        .uri("/api/v1/guest/doesnotexist")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_guest_whip_unknown_token() {
+    let (app, _key, _s) = setup().await;
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/guest/nope/whip")
+        .body(Body::from("v=0"))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_guest_whip_valid_token_pending() {
+    let (app, key, _s) = setup().await;
+    let body = invite_guest(&app, &key, "Jo").await;
+    let token = body["token"].as_str().unwrap().to_string();
+    let req = Request::builder()
+        .method("POST")
+        .uri(format!("/api/v1/guest/{}/whip", token))
+        .body(Body::from("v=0"))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    // WebRTC ingest not yet enabled — endpoint reports unavailable, not error.
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn test_guest_delete() {
+    let (app, key, _s) = setup().await;
+    let body = invite_guest(&app, &key, "Kim").await;
+    let id = body["id"].as_str().unwrap().to_string();
+
+    let resp = app
+        .clone()
+        .oneshot(json_request(
+            "DELETE",
+            &format!("/api/v1/guests/{}", id),
+            &key,
+            None,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    let resp = app
+        .oneshot(json_request(
+            "DELETE",
+            &format!("/api/v1/guests/{}", id),
+            &key,
+            None,
+        ))
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
