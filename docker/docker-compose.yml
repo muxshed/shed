@@ -19,5 +19,25 @@ services:
       - RUST_LOG=info
     restart: unless-stopped
 
+  # Optional TURN relay for WebRTC guests behind strict NAT.
+  # Enable with:  docker compose --profile turn up
+  # Then set the TURN URL/username/credential under Guests -> Connectivity.
+  # Replace REALM/secret and the external IP for production.
+  coturn:
+    image: coturn/coturn:latest
+    profiles: ["turn"]
+    network_mode: host
+    restart: unless-stopped
+    command: >
+      -n
+      --realm=muxshed
+      --listening-port=3478
+      --fingerprint
+      --lt-cred-mech
+      --user=guest:changeme
+      --no-tls
+      --no-dtls
+      --no-cli
+
 volumes:
   muxshed-data:

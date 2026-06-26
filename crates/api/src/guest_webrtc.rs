@@ -61,7 +61,7 @@ pub async fn start_guest_ingest(
 ) -> Result<String, String> {
     let (video_port, audio_port) = alloc_ports();
 
-    let pc = build_peer().await?;
+    let pc = build_peer(&state).await?;
 
     // Forward the guest's RTP to the FFmpeg UDP ports, rewriting the payload
     // type to our fixed values so the SDP FFmpeg reads is deterministic.
@@ -138,7 +138,7 @@ pub async fn start_guest_ingest(
     Ok(sdp)
 }
 
-async fn build_peer() -> Result<Arc<RTCPeerConnection>, String> {
+async fn build_peer(state: &AppState) -> Result<Arc<RTCPeerConnection>, String> {
     let mut m = MediaEngine::default();
     m.register_codec(
         RTCRtpCodecParameters {
@@ -180,11 +180,19 @@ async fn build_peer() -> Result<Arc<RTCPeerConnection>, String> {
         .with_interceptor_registry(registry)
         .build();
 
-    let config = RTCConfiguration {
-        ice_servers: vec![RTCIceServer {
-            urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+    let ice_servers = crate::routes::webrtc_config::load(state)
+        .await
+        .ice_servers
+        .into_iter()
+        .map(|s| RTCIceServer {
+            urls: s.urls,
+            username: s.username.unwrap_or_default(),
+            credential: s.credential.unwrap_or_default(),
             ..Default::default()
-        }],
+        })
+        .collect();
+    let config = RTCConfiguration {
+        ice_servers,
         ..Default::default()
     };
 
