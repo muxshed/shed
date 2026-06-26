@@ -236,6 +236,8 @@ An Unraid community app template is included at `docker/unraid-template.xml`.
 
 ## License
 
-[Business Source License 1.1](LICENSE)
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only)
 
-Converts to Apache License 2.0 on 2030-04-17. Self-hosting for personal or internal business use is always permitted. See LICENSE for full terms.
+Muxshed is free software: self-host it, modify it, and run it however you like. If you
+run a modified version as a network service, the AGPL requires you to offer your users
+the corresponding source. See [LICENSE](LICENSE) for full terms.

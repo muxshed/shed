@@ -2,7 +2,7 @@
 name = "muxshed-api"
 version.workspace = true
 edition = "2021"
-license = "BUSL-1.1"
+license = "AGPL-3.0-only"
 
 [dependencies]
 muxshed-common = { path = "../common" }
