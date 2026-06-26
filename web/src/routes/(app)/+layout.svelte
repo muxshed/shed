@@ -144,6 +144,7 @@
 		{ href: '/sources', label: 'Sources' },
 		{ href: '/library', label: 'Library' },
 		{ href: '/destinations', label: 'Destinations' },
+		{ href: '/guests', label: 'Guests' },
 		{ href: '/channel', label: 'Channel' },
 		{ href: '/settings', label: 'Settings' },
 	];

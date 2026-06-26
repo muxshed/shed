@@ -191,6 +191,8 @@ export interface DelayConfig {
 export interface Guest {
 	id: string;
 	name: string;
+	token: string;
+	status: string;
 	created_at: string;
 }
 

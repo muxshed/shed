@@ -160,7 +160,10 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         .route("/public/channel/{token}/unlock", post(channel::unlock))
         .route("/public/channel/{token}/index.m3u8", get(channel::serve_playlist))
         .route("/public/channel/{token}/logo", get(channel::serve_logo))
-        .route("/public/channel/{token}/{segment}", get(channel::serve_segment));
+        .route("/public/channel/{token}/{segment}", get(channel::serve_segment))
+        // Public guest join (token-scoped — no auth)
+        .route("/guest/{token}", get(guests::public_info))
+        .route("/guest/{token}/whip", post(guests::whip));
 
     let mut router = Router::new().nest("/api/v1", api);
 
