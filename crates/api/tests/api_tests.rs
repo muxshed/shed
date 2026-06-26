@@ -61,6 +61,7 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         media_players: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         source_normalizers: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         srt_listeners: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        guest_peers: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         program_tx,
         program_source: program_source_tx,
         preview_source: tokio::sync::RwLock::new(None),
@@ -665,7 +666,7 @@ async fn test_guest_whip_unknown_token() {
 }
 
 #[tokio::test]
-async fn test_guest_whip_valid_token_pending() {
+async fn test_guest_whip_malformed_offer() {
     let (app, key, _s) = setup().await;
     let body = invite_guest(&app, &key, "Jo").await;
     let token = body["token"].as_str().unwrap().to_string();
@@ -675,8 +676,9 @@ async fn test_guest_whip_valid_token_pending() {
         .body(Body::from("v=0"))
         .unwrap();
     let resp = app.oneshot(req).await.unwrap();
-    // WebRTC ingest not yet enabled — endpoint reports unavailable, not error.
-    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    // A malformed SDP offer is rejected during negotiation; the ephemeral
+    // source is rolled back.
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

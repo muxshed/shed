@@ -3,6 +3,7 @@
 pub mod auth;
 pub mod channel_hls;
 pub mod egress;
+pub mod guest_webrtc;
 pub mod media_player;
 pub mod media_probe;
 pub mod source_normalizer;
