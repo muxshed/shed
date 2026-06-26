@@ -13,6 +13,7 @@
 	let videoEl = $state<HTMLVideoElement | null>(null);
 	let stream: MediaStream | null = null;
 	let pc: RTCPeerConnection | null = null;
+	let iceServers: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 	onMount(async () => {
 		try {
@@ -23,6 +24,9 @@
 			}
 			const info = await res.json();
 			guestName = info.name ?? 'Guest';
+			if (Array.isArray(info.ice_servers) && info.ice_servers.length > 0) {
+				iceServers = info.ice_servers;
+			}
 			await startCamera();
 			mode = 'ready';
 		} catch {
@@ -49,7 +53,7 @@
 		mode = 'joining';
 		message = '';
 		try {
-			pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+			pc = new RTCPeerConnection({ iceServers });
 			stream.getTracks().forEach((t) => pc!.addTrack(t, stream!));
 
 			const offer = await pc.createOffer();
