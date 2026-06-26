@@ -19,6 +19,7 @@ mod status;
 mod stingers;
 mod stream;
 mod switching;
+pub mod webrtc_config;
 mod ws;
 
 use crate::auth::auth_middleware;
@@ -97,6 +98,10 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         .route("/delay/bleep", post(delay::bleep))
         // Output config and stats
         .route("/output/config", get(output::get_config).put(output::set_config))
+        .route(
+            "/webrtc/config",
+            get(webrtc_config::get_config).put(webrtc_config::set_config),
+        )
         .route("/output/stats", get(output::get_stats))
         // Public channel (HLS broadcast) config
         .route("/channel", get(channel::get_channel).put(channel::update_channel))

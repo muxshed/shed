@@ -37,13 +37,33 @@ Guests join via an unguessable invite link, allow camera/mic in the browser, and
 - Integration tests cover invite/list/delete, public info (+404), and the WHIP contract
   (unknown token → 404, malformed offer → 400 with rollback).
 
+## Connectivity (STUN / TURN)
+
+ICE servers are configurable and stored in `settings` under `webrtc_config`
+(`crates/api/src/routes/webrtc_config.rs`). The **same list is used by the server peer and
+handed to the guest browser** via `GET /guest/{token}` (`ice_servers`), so the two always
+agree. Default: a single public STUN server.
+
+- **API**: `GET`/`PUT /api/v1/webrtc/config` (operator).
+- **UI**: Guests → Connectivity (TURN) — set a TURN URL + username/credential, or leave
+  blank for STUN-only.
+- **TURN relay**: guests behind strict/symmetric NAT need TURN. An optional `coturn` service
+  ships in `docker/docker-compose.yml` under the `turn` profile:
+
+  ```sh
+  docker compose --profile turn up      # starts muxshed + coturn (host networking, :3478)
+  ```
+
+  Then point the Connectivity form at `turn:<host>:3478` with the configured
+  username/credential (change the `guest:changeme` default in the compose file). LAN guests
+  work without TURN.
+
 ## Not yet done
 
-- **TURN** — guests behind strict NAT need a TURN relay. Today only a public STUN server is
-  advertised, so LAN/same-network guests connect but off-LAN guests behind symmetric NAT
-  may not. Next: document/bundle an optional `coturn` and advertise its ICE servers.
 - **Codec breadth** — pinned to VP8 + Opus for a deterministic ffmpeg SDP. H.264 guests
   would need dynamic SDP/PT handling.
+- **TURN REST credentials** — only static long-term credentials are supported; coturn's
+  time-limited (HMAC) credential REST API is not yet wired.
 - ffmpeg in the runtime image must have the **VP8 decoder** (libvpx) and **libx264** — both
   are present in the standard Ubuntu ffmpeg the Docker image installs.
 

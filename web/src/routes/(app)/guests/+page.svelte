@@ -3,20 +3,64 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
 	import { notify } from '$lib/notify';
-	import type { Guest } from '$lib/types';
+	import type { Guest, IceServer } from '$lib/types';
 
 	let guests = $state<Guest[]>([]);
 	let name = $state('');
 	let creating = $state(false);
 	let copied = $state<string | null>(null);
 
-	onMount(load);
+	// TURN / connectivity
+	let turnUrl = $state('');
+	let turnUser = $state('');
+	let turnCred = $state('');
+	let savingTurn = $state(false);
+
+	onMount(() => {
+		load();
+		loadTurn();
+	});
 
 	async function load() {
 		try {
 			guests = await api.listGuests();
 		} catch (e) {
 			notify.error(e);
+		}
+	}
+
+	async function loadTurn() {
+		try {
+			const cfg = await api.getWebrtcConfig();
+			const turn = cfg.ice_servers.find((s) => (s.urls[0] ?? '').startsWith('turn'));
+			if (turn) {
+				turnUrl = turn.urls[0] ?? '';
+				turnUser = turn.username ?? '';
+				turnCred = turn.credential ?? '';
+			}
+		} catch (e) {
+			notify.error(e);
+		}
+	}
+
+	async function saveTurn(e: Event) {
+		e.preventDefault();
+		savingTurn = true;
+		try {
+			const ice: IceServer[] = [{ urls: ['stun:stun.l.google.com:19302'] }];
+			if (turnUrl.trim()) {
+				ice.push({
+					urls: [turnUrl.trim()],
+					username: turnUser.trim() || undefined,
+					credential: turnCred.trim() || undefined
+				});
+			}
+			await api.setWebrtcConfig({ ice_servers: ice });
+			notify.success('Connectivity saved');
+		} catch (e) {
+			notify.error(e);
+		} finally {
+			savingTurn = false;
 		}
 	}
 
@@ -97,6 +141,45 @@
 					</div>
 				{/each}
 			{/if}
+		</div>
+	</section>
+
+	<section class="panel">
+		<div class="panel__head">▮ Connectivity (TURN)</div>
+		<div class="panel__body">
+			<p class="mb-3 text-[12px] text-amber-muted">
+				Guests on the same network connect over STUN (always on). Guests behind strict NAT need a
+				TURN relay — point this at your own <span class="text-amber-dim">coturn</span> server. Leave
+				blank to use STUN only.
+			</p>
+			<form onsubmit={saveTurn} class="space-y-3">
+				<div>
+					<label class="field-label" for="turn-url">TURN URL</label>
+					<input
+						id="turn-url"
+						class="input"
+						bind:value={turnUrl}
+						placeholder="turn:turn.example.com:3478"
+					/>
+				</div>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div>
+						<label class="field-label" for="turn-user">Username</label>
+						<input id="turn-user" class="input" bind:value={turnUser} autocomplete="off" />
+					</div>
+					<div>
+						<label class="field-label" for="turn-cred">Credential</label>
+						<input
+							id="turn-cred"
+							class="input"
+							type="password"
+							bind:value={turnCred}
+							autocomplete="off"
+						/>
+					</div>
+				</div>
+				<button type="submit" disabled={savingTurn} class="btn">Save connectivity</button>
+			</form>
 		</div>
 	</section>
 </div>

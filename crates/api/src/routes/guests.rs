@@ -41,6 +41,8 @@ pub struct GuestListItem {
 pub struct GuestInfo {
     pub name: String,
     pub status: String,
+    /// ICE servers (STUN/TURN) the guest browser should use — matches the peer.
+    pub ice_servers: Vec<crate::routes::webrtc_config::IceServer>,
 }
 
 // ── Authenticated (operator) ──────────────────────────────────────────────────
@@ -127,9 +129,12 @@ pub async fn public_info(
     .await?
     .ok_or_else(|| MuxshedError::NotFound("guest link not found".to_string()))?;
 
+    let ice_servers = crate::routes::webrtc_config::load(&state).await.ice_servers;
+
     Ok(Json(GuestInfo {
         name: row.0,
         status: row.1,
+        ice_servers,
     }))
 }
 

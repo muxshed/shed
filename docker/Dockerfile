@@ -3,7 +3,8 @@
 # syntax=docker/dockerfile:1.7
 
 # --- cargo-chef: pre-built image (skips 5min cargo-chef compile) ---
-FROM lukemathwalker/cargo-chef:latest-rust-1.87 AS chef
+# Rust 1.88+ required: the webrtc dependency tree (via rcgen -> time) needs it.
+FROM lukemathwalker/cargo-chef:latest-rust-1.88 AS chef
 WORKDIR /build
 
 FROM chef AS planner
