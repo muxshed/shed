@@ -1,4 +1,4 @@
-<img src=".github/images/2000px.png" alt="Muxshed Studio" width="400" />
+<img src=".github/images/logo.png" alt="Muxshed" width="280" />
 
 # Muxshed
 
@@ -28,11 +28,10 @@ This started years ago as a passion project to understand the complexities of mu
 - WebRTC guest links
 - API key authentication
 - Real-time WebSocket state feed
-- Retro "Amber Rack" broadcast UI (dark, monospace + LED readouts; see `DESIGN.md`)
+- Stream Deck and Bitfocus Companion control
 
 ### Coming Soon
-- Whip Support
-- Stream Deck and Bitfocus Companion support
+- WHIP (WebRTC) ingest
 
 ## Public Watch Page
 
@@ -46,6 +45,18 @@ optionally add a viewer password, and share the unlisted link (`/watch/<token>`)
   when the broadcast begins — no refresh needed.
 - The link is unlisted; add a password to restrict it further. Regenerate the link any
   time to revoke access.
+
+## Stream Deck & Bitfocus Companion
+
+Control Muxshed from hardware. Both connect to your instance over its API (host + API key)
+and react to live state. Create an API key under **Settings → API Keys**, then enter your
+instance host and the key in the plugin/module configuration.
+
+- **[Elgato Stream Deck plugin](https://github.com/muxshed/streamdeck-plugin)** — one-press
+  Go Live, End Stream, Bleep, and Record toggle.
+- **[Bitfocus Companion module](https://github.com/muxshed/companion-module-muxshed)** — go
+  live, cut scenes/sources, show/hide overlays, record, and bleep, with on-air/recording
+  feedback, live variables, and ready-made presets.
 
 ## Architecture
 
@@ -183,7 +194,7 @@ All configuration is via environment variables. See `.env.example` for the full 
 ```sh
 cd system
 
-# Rust tests (API integration tests, all 15 pass)
+# Rust tests (API integration tests)
 cargo test --workspace
 
 # Frontend type checking
