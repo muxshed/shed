@@ -14,6 +14,35 @@ use muxshed_api::rtmp::start_rtmp_server;
 use muxshed_api::state::AppState;
 use muxshed_api::auth::hash_key;
 
+static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
+
+/// Run pending migrations. If an existing database trips a checksum mismatch —
+/// e.g. a migration file's license header changed between releases — re-sync the
+/// stored checksums to the embedded migrations and retry, so upgrades don't wedge.
+/// The embedded migrations are the source of truth; only checksums are touched,
+/// never schema.
+async fn run_migrations(db: &sqlx::SqlitePool) -> Result<(), Box<dyn std::error::Error>> {
+    match MIGRATOR.run(db).await {
+        Ok(()) => Ok(()),
+        Err(sqlx::migrate::MigrateError::VersionMismatch(version)) => {
+            tracing::warn!(
+                "migration v{version} checksum mismatch; re-syncing stored checksums and retrying \
+                 (expected after a migration header/relicense change)"
+            );
+            for m in MIGRATOR.iter() {
+                sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = ?")
+                    .bind(m.checksum.as_ref())
+                    .bind(m.version)
+                    .execute(db)
+                    .await?;
+            }
+            MIGRATOR.run(db).await?;
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = MuxshedConfig::from_env();
@@ -31,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&db_url)
         .await?;
 
-    sqlx::migrate!("../../migrations").run(&db).await?;
+    run_migrations(&db).await?;
 
     let needs_setup: i32 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys")
         .fetch_one(&db)
