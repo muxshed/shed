@@ -32,6 +32,7 @@ fn chrome_path() -> String {
         "/usr/bin/chromium",
         "/usr/bin/chromium-browser",
         "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
     ] {
         if std::path::Path::new(c).exists() {
             return c.to_string();

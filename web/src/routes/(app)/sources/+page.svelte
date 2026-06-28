@@ -8,8 +8,9 @@
 	import type { SourceKind } from '$lib/types';
 
 	let name = $state('');
-	let protocol = $state<'rtmp' | 'srt'>('rtmp');
+	let protocol = $state<'rtmp' | 'srt' | 'browser'>('rtmp');
 	let srtPassphrase = $state('');
+	let browserUrl = $state('');
 	let creating = $state(false);
 
 	onMount(refresh);
@@ -29,12 +30,16 @@
 					port: 0,
 					passphrase: srtPassphrase.trim() || undefined,
 				};
+			} else if (protocol === 'browser') {
+				if (!browserUrl.trim()) return;
+				kind = { type: 'browser', url: browserUrl.trim() };
 			} else {
 				kind = { type: 'rtmp', stream_key: '' };
 			}
 			await api.createSource(name.trim(), kind);
 			name = '';
 			srtPassphrase = '';
+			browserUrl = '';
 			await refresh();
 			notify.success('Source added');
 		} catch (e) {
@@ -56,6 +61,7 @@
 						<select id="source-protocol" bind:value={protocol} class="select">
 							<option value="rtmp">RTMP</option>
 							<option value="srt">SRT</option>
+							<option value="browser">Browser</option>
 						</select>
 					</div>
 					<div class="flex-1">
@@ -75,6 +81,16 @@
 							id="source-passphrase"
 							bind:value={srtPassphrase}
 							placeholder="Passphrase"
+							class="input"
+						/>
+					</div>
+				{:else if protocol === 'browser'}
+					<div>
+						<label class="field-label" for="source-url">Page URL</label>
+						<input
+							id="source-url"
+							bind:value={browserUrl}
+							placeholder="https://… (overlay, widget, scoreboard, web page)"
 							class="input"
 						/>
 					</div>
