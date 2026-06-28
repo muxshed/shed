@@ -27,6 +27,9 @@ bcrypt = "0.17"
 rml_rtmp = "0.8"
 bytes = "1"
 webrtc = "0.12"
+tokio-tungstenite = "0.29"
+base64 = "0.22"
+futures-util = "0.3"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
