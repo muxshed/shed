@@ -1,6 +1,6 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
-import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, RecordingState, StingerConfig, StingerAudio, DelayConfig, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig, WebrtcConfig } from './types';
+import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, RecordingState, StingerConfig, StingerAudio, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig, WebrtcConfig } from './types';
 
 function getSessionToken(): string {
 	if (typeof window === 'undefined') return '';
@@ -282,13 +282,6 @@ export const api = {
 	triggerTransition: (stingerId: string, targetSceneId: string) =>
 		request<void>('/transition/stinger', { method: 'POST', body: JSON.stringify({ stinger_id: stingerId, target_scene_id: targetSceneId }) }),
 
-	// Delay / Bleep
-	getDelay: () => request<DelayConfig>('/delay'),
-	updateDelay: (data: { enabled?: boolean; duration_ms?: number; whisper_enabled?: boolean }) =>
-		request<DelayConfig>('/delay', { method: 'PUT', body: JSON.stringify(data) }),
-	enableDelay: () => request<void>('/delay/enable', { method: 'POST' }),
-	disableDelay: () => request<void>('/delay/disable', { method: 'POST' }),
-	triggerBleep: () => request<void>('/delay/bleep', { method: 'POST' }),
 
 	// Guests
 	inviteGuest: (name: string) =>

@@ -5,7 +5,6 @@ mod audio;
 mod auth;
 mod broadcast;
 mod channel;
-mod delay;
 mod preview;
 mod destinations;
 mod guests;
@@ -91,11 +90,6 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         )
         .route("/destinations/{id}/enable", post(destinations::enable))
         .route("/destinations/{id}/disable", post(destinations::disable))
-        // Delay / Bleep
-        .route("/delay", get(delay::get_delay).put(delay::update_delay))
-        .route("/delay/enable", post(delay::enable))
-        .route("/delay/disable", post(delay::disable))
-        .route("/delay/bleep", post(delay::bleep))
         // Output config and stats
         .route("/output/config", get(output::get_config).put(output::set_config))
         .route(

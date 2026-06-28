@@ -123,13 +123,6 @@ pub enum PipelineState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DelayConfig {
-    pub enabled: bool,
-    pub duration_ms: u64,
-    pub whisper_enabled: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKey {
     pub id: Uuid,
     pub name: String,

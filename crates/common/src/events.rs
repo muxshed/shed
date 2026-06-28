@@ -35,14 +35,6 @@ pub enum WsEvent {
     TransitionComplete {
         scene_id: Uuid,
     },
-    BleepTriggered {
-        at_ms: u64,
-        source: String,
-    },
-    DelayBuffer {
-        live_ms: u64,
-        output_ms: u64,
-    },
     Error {
         message: String,
         code: String,

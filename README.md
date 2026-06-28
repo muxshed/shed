@@ -23,7 +23,6 @@ This started years ago as a passion project to understand the complexities of mu
 - Scene management with multi-layer compositor
 - Stinger transitions with frame-accurate marker editing
 - Image overlays and lower thirds
-- Broadcast delay with manual bleep
 - Local recording
 - WebRTC guest links
 - API key authentication
@@ -53,9 +52,9 @@ and react to live state. Create an API key under **Settings → API Keys**, then
 instance host and the key in the plugin/module configuration.
 
 - **[Elgato Stream Deck plugin](https://github.com/muxshed/streamdeck-plugin)** — one-press
-  Go Live, End Stream, Bleep, and Record toggle.
+  Go Live, End Stream, and Record toggle.
 - **[Bitfocus Companion module](https://github.com/muxshed/companion-module-muxshed)** — go
-  live, cut scenes/sources, show/hide overlays, record, and bleep, with on-air/recording
+  live, cut scenes/sources, show/hide overlays, and record, with on-air/recording
   feedback, live variables, and ready-made presets.
 
 ## Architecture
@@ -225,7 +224,6 @@ GET    /api/v1/destinations          List destinations
 POST   /api/v1/destinations          Create destination
 
 POST   /api/v1/transition/stinger    Trigger stinger transition
-POST   /api/v1/delay/bleep           Trigger manual bleep
 
 POST   /api/v1/record/start          Start recording
 POST   /api/v1/record/stop           Stop recording
