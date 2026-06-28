@@ -23,7 +23,7 @@
 	let assets = $state<Asset[]>([]);
 	let programSourceId = $state<string | null>(null);
 	let previewSourceId = $state<string | null>(null);
-	let activeTab = $state<'sources' | 'library'>('sources');
+	let activeTab = $state<'sources' | 'scenes' | 'library'>('sources');
 	let audioRouting = $state<AudioRouting>({
 		active_audio_source: null,
 		channels: [],
@@ -149,6 +149,17 @@
 		try {
 			await api.cutToSource(id);
 			programSourceId = id;
+		} catch (e) {
+			notify.error(e);
+		}
+	}
+
+	async function takeScene(id: string) {
+		try {
+			await api.activateScene(id);
+			programSourceId = id;
+			previewSourceId = null;
+			notify.success('Scene is live');
 		} catch (e) {
 			notify.error(e);
 		}
@@ -504,6 +515,7 @@
 			<div class="flex items-center border-b border-border-dim bg-panel-raised">
 				{#each [
 					{ id: 'sources', label: 'Sources' },
+					{ id: 'scenes', label: 'Scenes' },
 					{ id: 'library', label: 'Library' },
 				] as tab}
 					<button
@@ -558,6 +570,32 @@
 								</div>
 							{/each}
 						</div>
+					{/if}
+
+				{:else if activeTab === 'scenes'}
+					{#if $scenes.length === 0}
+						<p class="text-amber-muted">No scenes yet. <a href="/scenes" class="text-amber hover:text-amber-bright">Build one ▸</a></p>
+					{:else}
+						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+							{#each $scenes as scene (scene.id)}
+								<div class="rounded-sm border p-3 {scene.id === programSourceId ? 'border-danger bg-panel-raised' : 'border-border-dim hover:border-border'}">
+									<div class="mb-2 flex items-center justify-between gap-2">
+										<span class="truncate text-amber">{scene.name}</span>
+										<span class="pill {scene.id === programSourceId ? 'pill--live' : 'pill--idle'} text-[9px] shrink-0">
+											{scene.id === programSourceId ? '● LIVE' : `${scene.layers.length} layer${scene.layers.length !== 1 ? 's' : ''}`}
+										</span>
+									</div>
+									<button
+										onclick={() => takeScene(scene.id)}
+										disabled={scene.id === programSourceId}
+										class="btn btn--danger w-full"
+									>
+										Take to Program
+									</button>
+								</div>
+							{/each}
+						</div>
+						<p class="mt-3 text-[11px] text-amber-muted"><a href="/scenes" class="text-amber hover:text-amber-bright">Edit scenes ▸</a></p>
 					{/if}
 
 				{:else if activeTab === 'library'}
