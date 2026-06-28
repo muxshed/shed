@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::state::AppState;
-use muxshed_common::{Layer, MuxshedError, Position, Scene, Size, WsEvent};
+use muxshed_common::{Layer, LayerFit, MuxshedError, Position, Scene, Size, WsEvent};
 
 #[derive(Deserialize)]
 pub struct CreateScene {
@@ -31,6 +31,7 @@ pub struct CreateLayer {
     pub height: Option<u32>,
     pub z_index: Option<u32>,
     pub opacity: Option<f32>,
+    pub fit: Option<LayerFit>,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +43,7 @@ pub struct UpdateLayer {
     pub height: Option<u32>,
     pub z_index: Option<u32>,
     pub opacity: Option<f32>,
+    pub fit: Option<LayerFit>,
 }
 
 pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Scene>>, ApiError> {
@@ -215,7 +217,7 @@ pub async fn update_layer(
     Json(body): Json<UpdateLayer>,
 ) -> Result<Json<Layer>, ApiError> {
     let existing = sqlx::query_as::<_, LayerRow>(
-        "SELECT id, scene_id, source_id, x, y, width, height, z_index, opacity FROM scene_layers WHERE id = ? AND scene_id = ?",
+        "SELECT id, scene_id, source_id, x, y, width, height, z_index, opacity, fit FROM scene_layers WHERE id = ? AND scene_id = ?",
     )
     .bind(&layer_id)
     .bind(&scene_id)
@@ -230,9 +232,10 @@ pub async fn update_layer(
     let height = body.height.map(|h| h as i32).unwrap_or(existing.height);
     let z_index = body.z_index.map(|z| z as i32).unwrap_or(existing.z_index);
     let opacity = body.opacity.unwrap_or(existing.opacity);
+    let fit = body.fit.unwrap_or_else(|| LayerFit::from_db(&existing.fit));
 
     sqlx::query(
-        "UPDATE scene_layers SET source_id = ?, x = ?, y = ?, width = ?, height = ?, z_index = ?, opacity = ? WHERE id = ?",
+        "UPDATE scene_layers SET source_id = ?, x = ?, y = ?, width = ?, height = ?, z_index = ?, opacity = ?, fit = ? WHERE id = ?",
     )
     .bind(&source_id)
     .bind(x)
@@ -241,6 +244,7 @@ pub async fn update_layer(
     .bind(height)
     .bind(z_index)
     .bind(opacity)
+    .bind(fit.as_str())
     .bind(&layer_id)
     .execute(&state.db)
     .await?;
@@ -256,6 +260,7 @@ pub async fn update_layer(
         },
         z_index: z_index as u32,
         opacity,
+        fit,
     }))
 }
 
@@ -289,9 +294,10 @@ async fn insert_layer(
     let height = cl.height.unwrap_or(1080);
     let z_index = cl.z_index.unwrap_or(0);
     let opacity = cl.opacity.unwrap_or(1.0);
+    let fit = cl.fit.unwrap_or_default();
 
     sqlx::query(
-        "INSERT INTO scene_layers (id, scene_id, source_id, x, y, width, height, z_index, opacity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO scene_layers (id, scene_id, source_id, x, y, width, height, z_index, opacity, fit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(layer_id.to_string())
     .bind(scene_id)
@@ -302,6 +308,7 @@ async fn insert_layer(
     .bind(height as i32)
     .bind(z_index as i32)
     .bind(opacity)
+    .bind(fit.as_str())
     .execute(db)
     .await?;
 
@@ -312,12 +319,13 @@ async fn insert_layer(
         size: Size { width, height },
         z_index,
         opacity,
+        fit,
     })
 }
 
 async fn fetch_layers(db: &sqlx::SqlitePool, scene_id: &str) -> Result<Vec<Layer>, ApiError> {
     let rows = sqlx::query_as::<_, LayerRow>(
-        "SELECT id, scene_id, source_id, x, y, width, height, z_index, opacity FROM scene_layers WHERE scene_id = ? ORDER BY z_index",
+        "SELECT id, scene_id, source_id, x, y, width, height, z_index, opacity, fit FROM scene_layers WHERE scene_id = ? ORDER BY z_index",
     )
     .bind(scene_id)
     .fetch_all(db)
@@ -344,6 +352,7 @@ struct LayerRow {
     height: i32,
     z_index: i32,
     opacity: f32,
+    fit: String,
 }
 
 impl LayerRow {
@@ -361,6 +370,7 @@ impl LayerRow {
             },
             z_index: self.z_index as u32,
             opacity: self.opacity,
+            fit: LayerFit::from_db(&self.fit),
         }
     }
 }

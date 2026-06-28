@@ -1,6 +1,6 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
-import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, RecordingState, StingerConfig, StingerAudio, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig, WebrtcConfig } from './types';
+import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, LayerFit, RecordingState, StingerConfig, StingerAudio, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig, WebrtcConfig } from './types';
 
 function getSessionToken(): string {
 	if (typeof window === 'undefined') return '';
@@ -175,7 +175,7 @@ export const api = {
 
 	// Scenes
 	listScenes: () => request<Scene[]>('/scenes'),
-	createScene: (name: string, layers?: { source_id: string; x?: number; y?: number; width?: number; height?: number; z_index?: number; opacity?: number }[]) =>
+	createScene: (name: string, layers?: { source_id: string; x?: number; y?: number; width?: number; height?: number; z_index?: number; opacity?: number; fit?: LayerFit }[]) =>
 		request<Scene>('/scenes', {
 			method: 'POST',
 			body: JSON.stringify({ name, layers }),
@@ -188,12 +188,12 @@ export const api = {
 		}),
 	deleteScene: (id: string) => request<void>(`/scenes/${id}`, { method: 'DELETE' }),
 	activateScene: (id: string) => request<void>(`/scenes/${id}/activate`, { method: 'POST' }),
-	addLayer: (sceneId: string, layer: { source_id: string; x?: number; y?: number; width?: number; height?: number; z_index?: number; opacity?: number }) =>
+	addLayer: (sceneId: string, layer: { source_id: string; x?: number; y?: number; width?: number; height?: number; z_index?: number; opacity?: number; fit?: LayerFit }) =>
 		request<Layer>(`/scenes/${sceneId}/layers`, {
 			method: 'POST',
 			body: JSON.stringify(layer),
 		}),
-	updateLayer: (sceneId: string, layerId: string, data: { source_id?: string; x?: number; y?: number; width?: number; height?: number; z_index?: number; opacity?: number }) =>
+	updateLayer: (sceneId: string, layerId: string, data: { source_id?: string; x?: number; y?: number; width?: number; height?: number; z_index?: number; opacity?: number; fit?: LayerFit }) =>
 		request<Layer>(`/scenes/${sceneId}/layers/${layerId}`, {
 			method: 'PUT',
 			body: JSON.stringify(data),

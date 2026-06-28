@@ -52,6 +52,40 @@ pub struct Layer {
     pub size: Size,
     pub z_index: u32,
     pub opacity: f32,
+    #[serde(default)]
+    pub fit: LayerFit,
+}
+
+/// How a source fills its layer box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LayerFit {
+    /// Stretch to the box, ignoring aspect ratio.
+    #[default]
+    Fill,
+    /// Scale to fit inside the box, preserve aspect, centre (gaps show through).
+    Contain,
+    /// Scale to cover the box, preserve aspect, crop the overflow.
+    Cover,
+}
+
+impl LayerFit {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LayerFit::Fill => "fill",
+            LayerFit::Contain => "contain",
+            LayerFit::Cover => "cover",
+        }
+    }
+
+    /// Parse from stored text, defaulting to `Fill` for anything unknown.
+    pub fn from_db(s: &str) -> Self {
+        match s {
+            "contain" => LayerFit::Contain,
+            "cover" => LayerFit::Cover,
+            _ => LayerFit::Fill,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -256,6 +290,7 @@ mod tests {
                 size: Size { width: 1920, height: 1080 },
                 z_index: 2,
                 opacity: 0.5,
+                fit: LayerFit::Cover,
             }],
         };
         let back: Scene = serde_json::from_str(&serde_json::to_string(&scene).unwrap()).unwrap();
@@ -264,6 +299,12 @@ mod tests {
         assert_eq!(back.layers[0].position.y, -5);
         assert_eq!(back.layers[0].size.width, 1920);
         assert_eq!(back.layers[0].z_index, 2);
+        assert_eq!(back.layers[0].fit, LayerFit::Cover);
+        // fit defaults to Fill when absent from the wire
+        let legacy: Layer = serde_json::from_str(
+            r#"{"id":"00000000-0000-0000-0000-000000000000","source_id":"00000000-0000-0000-0000-000000000000","position":{"x":0,"y":0},"size":{"width":1,"height":1},"z_index":0,"opacity":1.0}"#
+        ).unwrap();
+        assert_eq!(legacy.fit, LayerFit::Fill);
         assert!((back.layers[0].opacity - 0.5).abs() < 1e-6);
     }
 
