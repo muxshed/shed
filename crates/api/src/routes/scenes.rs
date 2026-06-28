@@ -166,6 +166,13 @@ pub async fn activate(
         .ok_or_else(|| MuxshedError::NotFound(format!("scene {}", id)))?;
 
     let scene_uuid: Uuid = id.parse().map_err(|_| MuxshedError::BadRequest("invalid uuid".to_string()))?;
+
+    // Composite the scene's layers and route the result to program.
+    crate::scene_compositor::stop_all_compositors(&state).await;
+    crate::scene_compositor::start_scene_compositor(state.clone(), scene_uuid)
+        .await
+        .map_err(|e| MuxshedError::BadRequest(format!("cannot activate scene: {}", e)))?;
+    let _ = state.program_source.send(Some(scene_uuid));
     state.pipeline.activate_scene(&scene_uuid).await?;
 
     let _ = state.ws_tx.send(WsEvent::SceneChanged {
@@ -174,6 +181,16 @@ pub async fn activate(
     });
 
     Ok(StatusCode::OK)
+}
+
+/// Restart the compositor if this scene is currently the program (so live edits
+/// to its layers take effect immediately).
+async fn refresh_if_active(state: &Arc<AppState>, scene_id: &str) {
+    if let Ok(uuid) = scene_id.parse::<Uuid>() {
+        if *state.program_source.borrow() == Some(uuid) {
+            let _ = crate::scene_compositor::start_scene_compositor(state.clone(), uuid).await;
+        }
+    }
 }
 
 pub async fn add_layer(
@@ -188,6 +205,7 @@ pub async fn add_layer(
         .ok_or_else(|| MuxshedError::NotFound(format!("scene {}", scene_id)))?;
 
     let layer = insert_layer(&state.db, &scene_id, body).await?;
+    refresh_if_active(&state, &scene_id).await;
     Ok((StatusCode::CREATED, Json(layer)))
 }
 
@@ -227,6 +245,7 @@ pub async fn update_layer(
     .execute(&state.db)
     .await?;
 
+    refresh_if_active(&state, &scene_id).await;
     Ok(Json(Layer {
         id: layer_id.parse().unwrap_or_default(),
         source_id: source_id.parse().unwrap_or_default(),
@@ -254,6 +273,7 @@ pub async fn delete_layer(
         return Err(MuxshedError::NotFound(format!("layer {}", layer_id)).into());
     }
 
+    refresh_if_active(&state, &scene_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 

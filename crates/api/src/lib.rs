@@ -12,4 +12,5 @@ pub mod error;
 pub mod program;
 pub mod routes;
 pub mod rtmp;
+pub mod scene_compositor;
 pub mod state;
