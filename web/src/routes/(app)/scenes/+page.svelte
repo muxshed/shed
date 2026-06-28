@@ -4,7 +4,7 @@
 	import { api } from '$lib/api';
 	import { scenes, sources, pipelineState } from '$lib/stores/pipeline';
 	import { notify } from '$lib/notify';
-	import type { Scene, Layer, Asset, LayerFit } from '$lib/types';
+	import type { Scene, Layer, Asset } from '$lib/types';
 
 	const OUT_W = 1920;
 	const OUT_H = 1080;
@@ -175,10 +175,6 @@
 		l.opacity = v;
 		await saveLayer(l);
 	}
-	async function setFit(l: Layer, v: LayerFit) {
-		l.fit = v;
-		await saveLayer(l);
-	}
 </script>
 
 <div class="mx-auto flex max-w-6xl gap-4">
@@ -298,8 +294,8 @@
 								</button>
 								<div class="flex items-center gap-1">
 									<select
-										value={l.fit ?? 'fill'}
-										onchange={(e) => setFit(l, e.currentTarget.value as LayerFit)}
+										bind:value={l.fit}
+										onchange={() => saveLayer(l)}
 										class="select h-7 py-0 text-[11px]" title="Fit mode"
 										aria-label="Fit mode"
 									>
