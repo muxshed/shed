@@ -11,6 +11,7 @@ export interface Instance {
 export type SourceKind =
 	| { type: 'rtmp'; stream_key: string }
 	| { type: 'srt'; port: number; passphrase?: string }
+	| { type: 'browser'; url: string }
 	| { type: 'web_rtc'; token: string }
 	| { type: 'test_pattern' }
 	| { type: 'media_file'; asset_id: string; file_path: string; loop_mode: string };
