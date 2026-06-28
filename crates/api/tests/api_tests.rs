@@ -718,3 +718,130 @@ async fn test_guest_delete() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
+
+// --- Scene + layer tests ---
+
+async fn make_source(app: &axum::Router, key: &str) -> String {
+    let req = json_request(
+        "POST",
+        "/api/v1/sources",
+        key,
+        Some(r#"{"name":"S","kind":{"type":"rtmp","stream_key":""}}"#),
+    );
+    let resp = app.clone().oneshot(req).await.unwrap();
+    response_json(resp).await["id"].as_str().unwrap().to_string()
+}
+
+#[tokio::test]
+async fn test_scene_crud_and_layers() {
+    let (app, key, _s) = setup().await;
+    let src = make_source(&app, &key).await;
+
+    // create scene with one layer
+    let body = format!(
+        r#"{{"name":"Main","layers":[{{"source_id":"{}","x":0,"y":0,"width":1920,"height":1080,"z_index":0,"opacity":1.0}}]}}"#,
+        src
+    );
+    let resp = app
+        .clone()
+        .oneshot(json_request("POST", "/api/v1/scenes", &key, Some(&body)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let scene = response_json(resp).await;
+    let sid = scene["id"].as_str().unwrap().to_string();
+    assert_eq!(scene["name"], "Main");
+    assert_eq!(scene["layers"].as_array().unwrap().len(), 1);
+
+    // list + get
+    let resp = app.clone().oneshot(json_request("GET", "/api/v1/scenes", &key, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(response_json(resp).await.as_array().unwrap().len(), 1);
+    let resp = app.clone().oneshot(json_request("GET", &format!("/api/v1/scenes/{}", sid), &key, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // rename
+    let resp = app
+        .clone()
+        .oneshot(json_request("PUT", &format!("/api/v1/scenes/{}", sid), &key, Some(r#"{"name":"Renamed"}"#)))
+        .await
+        .unwrap();
+    assert_eq!(response_json(resp).await["name"], "Renamed");
+
+    // add a second layer
+    let lbody = format!(r#"{{"source_id":"{}","x":1240,"y":700,"width":640,"height":360,"z_index":1,"opacity":1.0}}"#, src);
+    let resp = app
+        .clone()
+        .oneshot(json_request("POST", &format!("/api/v1/scenes/{}/layers", sid), &key, Some(&lbody)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let layer_id = response_json(resp).await["id"].as_str().unwrap().to_string();
+
+    // update + delete the layer
+    let resp = app
+        .clone()
+        .oneshot(json_request("PUT", &format!("/api/v1/scenes/{}/layers/{}", sid, layer_id), &key, Some(r#"{"opacity":0.5}"#)))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let resp = app
+        .clone()
+        .oneshot(json_request("DELETE", &format!("/api/v1/scenes/{}/layers/{}", sid, layer_id), &key, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // delete the scene
+    let resp = app.clone().oneshot(json_request("DELETE", &format!("/api/v1/scenes/{}", sid), &key, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    let resp = app.oneshot(json_request("GET", &format!("/api/v1/scenes/{}", sid), &key, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_scene_activate_unknown_404() {
+    let (app, key, _s) = setup().await;
+    let resp = app
+        .oneshot(json_request("POST", "/api/v1/scenes/00000000-0000-0000-0000-000000000000/activate", &key, None))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_scene_activate_no_live_layers_400() {
+    let (app, key, _s) = setup().await;
+    let src = make_source(&app, &key).await;
+    let body = format!(
+        r#"{{"name":"X","layers":[{{"source_id":"{}","x":0,"y":0,"width":100,"height":100,"z_index":0,"opacity":1.0}}]}}"#,
+        src
+    );
+    let resp = app.clone().oneshot(json_request("POST", "/api/v1/scenes", &key, Some(&body))).await.unwrap();
+    let sid = response_json(resp).await["id"].as_str().unwrap().to_string();
+    // source is not live -> compositor can't start -> 400
+    let resp = app.oneshot(json_request("POST", &format!("/api/v1/scenes/{}/activate", sid), &key, None)).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_browser_source_create() {
+    let (app, key, _s) = setup().await;
+    let resp = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/sources",
+            &key,
+            Some(r#"{"name":"Web","kind":{"type":"browser","url":"https://example.com/overlay"}}"#),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let body = response_json(resp).await;
+    assert_eq!(body["kind"]["type"], "browser");
+    assert_eq!(body["kind"]["url"], "https://example.com/overlay");
+    let id = body["id"].as_str().unwrap().to_string();
+    let resp = app.oneshot(json_request("GET", &format!("/api/v1/sources/{}", id), &key, None)).await.unwrap();
+    assert_eq!(response_json(resp).await["kind"]["url"], "https://example.com/overlay");
+}
