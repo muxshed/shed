@@ -142,6 +142,7 @@
 	const nav = [
 		{ href: '/', label: 'Studio' },
 		{ href: '/sources', label: 'Sources' },
+		{ href: '/scenes', label: 'Scenes' },
 		{ href: '/library', label: 'Library' },
 		{ href: '/destinations', label: 'Destinations' },
 		{ href: '/guests', label: 'Guests' },
