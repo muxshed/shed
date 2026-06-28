@@ -53,6 +53,8 @@ export interface ApiKey {
 	last_used_at?: string;
 }
 
+export type LayerFit = 'fill' | 'contain' | 'cover';
+
 export interface Layer {
 	id: string;
 	source_id: string;
@@ -60,6 +62,7 @@ export interface Layer {
 	size: { width: number; height: number };
 	z_index: number;
 	opacity: number;
+	fit: LayerFit;
 }
 
 export interface Scene {

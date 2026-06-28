@@ -4,7 +4,7 @@
 	import { api } from '$lib/api';
 	import { scenes, sources, pipelineState } from '$lib/stores/pipeline';
 	import { notify } from '$lib/notify';
-	import type { Scene, Layer, Asset } from '$lib/types';
+	import type { Scene, Layer, Asset, LayerFit } from '$lib/types';
 
 	const OUT_W = 1920;
 	const OUT_H = 1080;
@@ -110,7 +110,8 @@
 				width: Math.round(l.size.width),
 				height: Math.round(l.size.height),
 				z_index: l.z_index,
-				opacity: l.opacity
+				opacity: l.opacity,
+				fit: l.fit
 			});
 		} catch (e) {
 			notify.error(e);
@@ -172,6 +173,10 @@
 	}
 	async function setOpacity(l: Layer, v: number) {
 		l.opacity = v;
+		await saveLayer(l);
+	}
+	async function setFit(l: Layer, v: LayerFit) {
+		l.fit = v;
 		await saveLayer(l);
 	}
 </script>
@@ -292,6 +297,16 @@
 									</span>
 								</button>
 								<div class="flex items-center gap-1">
+									<select
+										value={l.fit ?? 'fill'}
+										onchange={(e) => setFit(l, e.currentTarget.value as LayerFit)}
+										class="select h-7 py-0 text-[11px]" title="Fit mode"
+										aria-label="Fit mode"
+									>
+										<option value="fill">Fill</option>
+										<option value="contain">Contain</option>
+										<option value="cover">Cover</option>
+									</select>
 									<input
 										type="range" min="0" max="1" step="0.05" value={l.opacity}
 										oninput={(e) => setOpacity(l, +e.currentTarget.value)}

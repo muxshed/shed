@@ -22,6 +22,7 @@ use uuid::Uuid;
 
 use crate::routes::output::OutputConfig;
 use crate::state::AppState;
+use muxshed_common::LayerFit;
 
 struct CompLayer {
     source_id: Uuid,
@@ -30,31 +31,55 @@ struct CompLayer {
     w: u32,
     h: u32,
     opacity: f32,
+    fit: LayerFit,
+}
+
+/// Translate a layer's fit mode into `(scale_chain, overlay_x, overlay_y)` for a
+/// `w`x`h` box at `x`,`y`:
+///   fill    — stretch to the box (ignores aspect)
+///   cover   — scale to cover preserving aspect, then crop to the box
+///   contain — scale to fit inside preserving aspect, then centre in the box
+fn fit_filter(fit: LayerFit, x: i32, y: i32, w: u32, h: u32) -> (String, String, String) {
+    match fit {
+        LayerFit::Fill => (format!("scale={}:{}", w, h), x.to_string(), y.to_string()),
+        LayerFit::Cover => (
+            format!("scale={}:{}:force_original_aspect_ratio=increase,crop={}:{}", w, h, w, h),
+            x.to_string(),
+            y.to_string(),
+        ),
+        LayerFit::Contain => (
+            format!("scale={}:{}:force_original_aspect_ratio=decrease", w, h),
+            // centre the (smaller) scaled image within the box; w/h here are the
+            // overlay's post-scale dimensions, resolved by ffmpeg at runtime.
+            format!("{}+({}-w)/2", x, w),
+            format!("{}+({}-h)/2", y, h),
+        ),
+    }
 }
 
 /// Build the ffmpeg `filter_complex` that composites the layers (bottom-first)
-/// onto a black canvas, and return `(graph, final_video_label)`. Opaque layers
-/// are scaled then overlaid; semi-transparent layers also get an alpha multiply.
+/// onto a black canvas, and return `(graph, final_video_label)`.
 fn build_filter_graph(layers: &[CompLayer], width: u32, height: u32, fps: u32) -> (String, String) {
     let mut graph = vec![format!("color=c=black:s={}x{}:r={}[base]", width, height, fps)];
     let mut prev = "base".to_string();
     for (i, layer) in layers.iter().enumerate() {
+        let (scale, ox, oy) = fit_filter(layer.fit, layer.x, layer.y, layer.w, layer.h);
         // setpts=PTS-STARTPTS rebases each live source to a 0-based clock. Each
         // source has its own timestamp epoch (one running for minutes, a freshly
         // added image starting near zero); without rebasing, overlay's framesync
         // can't pair frames across layers and the graph stalls with no output.
         if layer.opacity < 0.999 {
             graph.push(format!(
-                "[{}:v]setpts=PTS-STARTPTS,scale={}:{},format=yuva420p,colorchannelmixer=aa={:.3}[l{}]",
-                i, layer.w, layer.h, layer.opacity, i
+                "[{}:v]setpts=PTS-STARTPTS,{},format=yuva420p,colorchannelmixer=aa={:.3}[l{}]",
+                i, scale, layer.opacity, i
             ));
         } else {
-            graph.push(format!("[{}:v]setpts=PTS-STARTPTS,scale={}:{}[l{}]", i, layer.w, layer.h, i));
+            graph.push(format!("[{}:v]setpts=PTS-STARTPTS,{}[l{}]", i, scale, i));
         }
         let out = format!("s{}", i);
         graph.push(format!(
             "[{}][l{}]overlay=x={}:y={}:eof_action=pass[{}]",
-            prev, i, layer.x, layer.y, out
+            prev, i, ox, oy, out
         ));
         prev = out;
     }
@@ -66,8 +91,8 @@ fn build_filter_graph(layers: &[CompLayer], width: u32, height: u32, fps: u32) -
 pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Result<(), String> {
     stop_scene_compositor(&state, &scene_id).await;
 
-    let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64, f64)>(
-        "SELECT source_id, x, y, width, height, z_index, opacity \
+    let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64, f64, String)>(
+        "SELECT source_id, x, y, width, height, z_index, opacity, fit \
          FROM scene_layers WHERE scene_id = ? ORDER BY z_index ASC",
     )
     .bind(scene_id.to_string())
@@ -76,7 +101,7 @@ pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Res
     .map_err(|e| e.to_string())?;
 
     let mut layers = Vec::new();
-    for (sid, x, y, w, h, _z, op) in rows {
+    for (sid, x, y, w, h, _z, op, fit) in rows {
         if let Ok(source_id) = sid.parse::<Uuid>() {
             // A layer is only safe to composite if its source is actually
             // producing video. overlay needs a first frame from every input;
@@ -101,6 +126,7 @@ pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Res
                     w: (w as u32).max(2),
                     h: (h as u32).max(2),
                     opacity: op as f32,
+                    fit: LayerFit::from_db(&fit),
                 });
             } else {
                 tracing::warn!(
@@ -387,7 +413,33 @@ mod tests {
     use super::*;
 
     fn layer(x: i32, y: i32, w: u32, h: u32, opacity: f32) -> CompLayer {
-        CompLayer { source_id: Uuid::nil(), x, y, w, h, opacity }
+        CompLayer { source_id: Uuid::nil(), x, y, w, h, opacity, fit: LayerFit::Fill }
+    }
+
+    fn layer_fit(x: i32, y: i32, w: u32, h: u32, fit: LayerFit) -> CompLayer {
+        CompLayer { source_id: Uuid::nil(), x, y, w, h, opacity: 1.0, fit }
+    }
+
+    #[test]
+    fn fill_stretches_to_box() {
+        let (g, _) = build_filter_graph(&[layer_fit(0, 0, 640, 360, LayerFit::Fill)], 1920, 1080, 30);
+        assert!(g.contains("[0:v]setpts=PTS-STARTPTS,scale=640:360[l0]"));
+        assert!(g.contains("[base][l0]overlay=x=0:y=0:eof_action=pass[s0]"));
+    }
+
+    #[test]
+    fn cover_scales_up_and_crops() {
+        let (g, _) = build_filter_graph(&[layer_fit(100, 50, 640, 360, LayerFit::Cover)], 1920, 1080, 30);
+        assert!(g.contains("scale=640:360:force_original_aspect_ratio=increase,crop=640:360"));
+        assert!(g.contains("overlay=x=100:y=50:eof_action=pass"));
+    }
+
+    #[test]
+    fn contain_fits_inside_and_centres() {
+        let (g, _) = build_filter_graph(&[layer_fit(100, 50, 640, 360, LayerFit::Contain)], 1920, 1080, 30);
+        assert!(g.contains("scale=640:360:force_original_aspect_ratio=decrease"));
+        // centred within the box via runtime overlay-dimension expressions
+        assert!(g.contains("overlay=x=100+(640-w)/2:y=50+(360-h)/2:eof_action=pass"));
     }
 
     #[test]
