@@ -114,6 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         srt_listeners: RwLock::new(std::collections::HashMap::new()),
         guest_peers: RwLock::new(std::collections::HashMap::new()),
         scene_compositors: RwLock::new(std::collections::HashMap::new()),
+        browser_sources: RwLock::new(std::collections::HashMap::new()),
         program_tx,
         program_source: program_source_tx,
         preview_source: RwLock::new(None),
@@ -156,6 +157,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             ).await {
                                 tracing::warn!("failed to start SRT listener for {}: {}", id, e);
                             }
+                        });
+                    }
+                } else if let muxshed_common::SourceKind::Browser { url } = kind {
+                    if let Ok(id) = id_str.parse::<uuid::Uuid>() {
+                        let s = state.clone();
+                        tokio::spawn(async move {
+                            let _ = muxshed_api::browser_source::start_browser_source(s, id, url).await;
                         });
                     }
                 }

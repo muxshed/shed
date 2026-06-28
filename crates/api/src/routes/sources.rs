@@ -77,6 +77,18 @@ pub async fn create(
         ).await;
     }
 
+    // Browser sources start rendering immediately (in the background — launching
+    // Chrome takes a moment and shouldn't block the API response).
+    if let SourceKind::Browser { url } = &kind {
+        let st = state.clone();
+        let u = url.clone();
+        tokio::spawn(async move {
+            if let Err(e) = crate::browser_source::start_browser_source(st, id, u).await {
+                tracing::warn!("browser source {} failed to start: {}", id, e);
+            }
+        });
+    }
+
     let source = Source {
         id,
         name: body.name,
@@ -158,6 +170,7 @@ pub async fn delete(
         crate::srt::stop_srt_listener(&state, &uid).await;
         crate::media_player::stop_media_playback(&state, &uid).await;
         crate::guest_webrtc::stop_guest_ingest(&state, &uid).await;
+        crate::browser_source::stop_browser_source(&state, &uid).await;
     }
 
     Ok(StatusCode::NO_CONTENT)

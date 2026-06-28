@@ -63,6 +63,7 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         srt_listeners: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         guest_peers: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         scene_compositors: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        browser_sources: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         program_tx,
         program_source: program_source_tx,
         preview_source: tokio::sync::RwLock::new(None),

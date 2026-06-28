@@ -25,6 +25,7 @@ pub enum SourceKind {
         file_path: PathBuf,
         loop_mode: String,
     },
+    Browser { url: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
