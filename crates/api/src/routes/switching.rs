@@ -64,6 +64,8 @@ pub async fn cut(
     }
     drop(states);
 
+    // Cutting to a single source replaces any active scene composite.
+    crate::scene_compositor::stop_all_compositors(&state).await;
     let _ = state.program_source.send(Some(id));
 
     let _ = state.ws_tx.send(WsEvent::SceneChanged {
