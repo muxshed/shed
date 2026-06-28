@@ -389,37 +389,6 @@ async fn test_stinger_crud() {
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 }
 
-// --- Delay tests ---
-
-#[tokio::test]
-async fn test_delay_config() {
-    let (app, key, _state) = setup().await;
-
-    // Get default
-    let req = json_request("GET", "/api/v1/delay", &key, None);
-    let resp = app.clone().oneshot(req).await.unwrap();
-    let body = response_json(resp).await;
-    assert_eq!(body["enabled"], false);
-    assert_eq!(body["duration_ms"], 7000);
-
-    // Update
-    let req = json_request(
-        "PUT",
-        "/api/v1/delay",
-        &key,
-        Some(r#"{"enabled":true,"duration_ms":10000}"#),
-    );
-    let resp = app.clone().oneshot(req).await.unwrap();
-    let body = response_json(resp).await;
-    assert_eq!(body["enabled"], true);
-    assert_eq!(body["duration_ms"], 10000);
-
-    // Bleep
-    let req = json_request("POST", "/api/v1/delay/bleep", &key, None);
-    let resp = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK);
-}
-
 // --- Guest tests ---
 
 #[tokio::test]

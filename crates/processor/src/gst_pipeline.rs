@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use gstreamer::prelude::*;
-use muxshed_common::{DelayConfig, Destination, DestinationKind, MuxshedError, PipelineState, RecordingState, WsEvent};
+use muxshed_common::{Destination, DestinationKind, MuxshedError, PipelineState, RecordingState, WsEvent};
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use uuid::Uuid;
@@ -402,19 +402,6 @@ impl PipelineController for GstPipelineController {
 
     async fn recording_state(&self) -> RecordingState {
         self.recording.lock().await.clone()
-    }
-
-    async fn set_delay(&self, config: &DelayConfig) -> Result<(), MuxshedError> {
-        tracing::info!("gst: set_delay enabled={} duration={}ms", config.enabled, config.duration_ms);
-        Ok(())
-    }
-
-    async fn trigger_bleep(&self) -> Result<(), MuxshedError> {
-        let _ = self.ws_tx.send(WsEvent::BleepTriggered {
-            at_ms: 0,
-            source: "manual".to_string(),
-        });
-        Ok(())
     }
 
     async fn trigger_stinger_transition(

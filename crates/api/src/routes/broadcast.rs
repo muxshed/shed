@@ -15,8 +15,6 @@ pub struct BroadcastConfig {
     pub scene_id: Option<Uuid>,
     pub start_stinger_id: Option<Uuid>,
     pub destination_ids: Vec<Uuid>,
-    pub enable_delay: bool,
-    pub delay_ms: u64,
     pub auto_record: bool,
 }
 

@@ -101,15 +101,6 @@ pub async fn start(
         return Err(MuxshedError::BadRequest("source is not streaming".to_string()).into());
     }
 
-    if saved_config.enable_delay {
-        let delay = muxshed_common::DelayConfig {
-            enabled: true,
-            duration_ms: saved_config.delay_ms,
-            whisper_enabled: false,
-        };
-        let _ = state.pipeline.set_delay(&delay).await;
-    }
-
     let output_config: Option<crate::routes::output::OutputConfig> =
         sqlx::query_as::<_, (String,)>("SELECT value FROM settings WHERE key = 'output_config'")
             .fetch_optional(&state.db)

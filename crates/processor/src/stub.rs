@@ -1,7 +1,7 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
 use async_trait::async_trait;
-use muxshed_common::{DelayConfig, Destination, MuxshedError, PipelineState, RecordingState, WsEvent};
+use muxshed_common::{Destination, MuxshedError, PipelineState, RecordingState, WsEvent};
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use uuid::Uuid;
@@ -143,20 +143,6 @@ impl PipelineController for StubPipelineController {
 
     async fn recording_state(&self) -> RecordingState {
         self.recording.lock().await.clone()
-    }
-
-    async fn set_delay(&self, config: &DelayConfig) -> Result<(), MuxshedError> {
-        tracing::info!("stub: set_delay enabled={} duration={}ms", config.enabled, config.duration_ms);
-        Ok(())
-    }
-
-    async fn trigger_bleep(&self) -> Result<(), MuxshedError> {
-        tracing::info!("stub: trigger_bleep");
-        let _ = self.ws_tx.send(WsEvent::BleepTriggered {
-            at_ms: 0,
-            source: "manual".to_string(),
-        });
-        Ok(())
     }
 
     async fn trigger_stinger_transition(

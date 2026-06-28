@@ -94,8 +94,6 @@ export interface BroadcastConfig {
 	scene_id: string | null;
 	start_stinger_id: string | null;
 	destination_ids: string[];
-	enable_delay: boolean;
-	delay_ms: number;
 	auto_record: boolean;
 }
 
@@ -192,11 +190,6 @@ export interface StingerConfig {
 	thumbnail_path: string;
 }
 
-export interface DelayConfig {
-	enabled: boolean;
-	duration_ms: number;
-	whisper_enabled: boolean;
-}
 
 export interface Guest {
 	id: string;
@@ -232,5 +225,4 @@ export type WsEvent =
 	| { type: 'recording_state'; payload: { recording: boolean; path?: string } }
 	| { type: 'transition_started'; payload: { stinger_id: string; target_scene_id: string } }
 	| { type: 'transition_complete'; payload: { scene_id: string } }
-	| { type: 'bleep_triggered'; payload: { at_ms: number; source: string } }
 	| { type: 'error'; payload: { message: string; code: string } };

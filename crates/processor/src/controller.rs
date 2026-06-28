@@ -1,7 +1,7 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
 use async_trait::async_trait;
-use muxshed_common::{DelayConfig, Destination, MuxshedError, PipelineState, RecordingState};
+use muxshed_common::{Destination, MuxshedError, PipelineState, RecordingState};
 use std::path::Path;
 use uuid::Uuid;
 
@@ -16,8 +16,6 @@ pub trait PipelineController: Send + Sync {
     async fn start_recording(&self, path: &Path) -> Result<(), MuxshedError>;
     async fn stop_recording(&self) -> Result<(), MuxshedError>;
     async fn recording_state(&self) -> RecordingState;
-    async fn set_delay(&self, config: &DelayConfig) -> Result<(), MuxshedError>;
-    async fn trigger_bleep(&self) -> Result<(), MuxshedError>;
     async fn trigger_stinger_transition(
         &self,
         stinger_id: &Uuid,

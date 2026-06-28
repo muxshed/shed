@@ -52,8 +52,6 @@
 		scene_id: null,
 		start_stinger_id: null,
 		destination_ids: [],
-		enable_delay: false,
-		delay_ms: 7000,
 		auto_record: false,
 	});
 	let configDirty = $state(false);
@@ -192,12 +190,6 @@
 		}
 	}
 
-	async function bleep() {
-		try { await api.triggerBleep(); } catch (e) {
-			notify.error(e);
-		}
-	}
-
 	async function saveConfig() {
 		try {
 			config = await api.setBroadcastConfig(config);
@@ -285,13 +277,6 @@
 						class="btn {$isRecording ? 'btn--danger' : ''}"
 					>
 						{$isRecording ? '● Stop Rec' : '● Record'}
-					</button>
-					<button
-						onclick={bleep}
-						class="btn"
-						style="border-color: var(--color-warning); color: var(--color-warning)"
-					>
-						▲ Bleep
 					</button>
 					{#if $pipelineState.state === 'live'}
 						<span class="pill pill--live ml-auto">● ON AIR — since {new Date($pipelineState.started_at).toLocaleTimeString()}</span>
