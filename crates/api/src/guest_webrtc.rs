@@ -13,8 +13,8 @@
 
 use bytes::Bytes;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::UdpSocket;
 use tokio::process::Command;
@@ -30,6 +30,8 @@ use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
+use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use webrtc::track::track_remote::TrackRemote;
 use webrtc::rtp_transceiver::rtp_codec::{
     RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType,
 };
@@ -42,13 +44,19 @@ use crate::state::AppState;
 const VP8_PT: u8 = 96;
 const OPUS_PT: u8 = 111;
 
-/// Local UDP port allocator for the FFmpeg <- RTP bridge (video, audio per guest).
-static PORT_COUNTER: AtomicU16 = AtomicU16::new(0);
-
-fn alloc_ports() -> (u16, u16) {
-    let n = PORT_COUNTER.fetch_add(1, Ordering::Relaxed) % 1000;
-    let base = 41000 + n * 2;
-    (base, base + 1)
+/// Find a free UDP port pair for the FFmpeg <- RTP bridge by binding probe
+/// sockets, so we never collide with a still-running ingest's ports. The probe
+/// sockets are dropped before returning, freeing the ports for FFmpeg to bind.
+async fn alloc_ports() -> Result<(u16, u16), String> {
+    let s1 = UdpSocket::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("port probe: {}", e))?;
+    let s2 = UdpSocket::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("port probe: {}", e))?;
+    let p1 = s1.local_addr().map_err(|e| e.to_string())?.port();
+    let p2 = s2.local_addr().map_err(|e| e.to_string())?.port();
+    Ok((p1, p2))
 }
 
 /// Accept a guest's WHIP offer, wire up the RTP -> FFmpeg -> relay bridge, and
@@ -59,7 +67,7 @@ pub async fn start_guest_ingest(
     source_id: Uuid,
     offer_sdp: String,
 ) -> Result<String, String> {
-    let (video_port, audio_port) = alloc_ports();
+    let (video_port, audio_port) = alloc_ports().await?;
 
     let pc = build_peer(&state).await?;
 
@@ -70,25 +78,10 @@ pub async fn start_guest_ingest(
             .await
             .map_err(|e| format!("udp bind: {}", e))?,
     );
-    let fwd = forward.clone();
-    pc.on_track(Box::new(move |track, _receiver, _transceiver| {
-        let fwd = fwd.clone();
-        Box::pin(async move {
-            let is_video = track.kind() == RTPCodecType::Video;
-            let (pt, port) = if is_video {
-                (VP8_PT, video_port)
-            } else {
-                (OPUS_PT, audio_port)
-            };
-            let addr = format!("127.0.0.1:{}", port);
-            while let Ok((mut packet, _)) = track.read_rtp().await {
-                packet.header.payload_type = pt;
-                if let Ok(raw) = packet.marshal() {
-                    let _ = fwd.send_to(&raw, &addr).await;
-                }
-            }
-        })
-    }));
+    // NOTE: we do NOT use pc.on_track — webrtc-rs only fires it for one of two
+    // bundled tracks (audio), silently dropping the video track even though its
+    // receiver is set up correctly. Instead we read tracks directly off the
+    // transceivers' receivers (see the pump task below).
 
     // Tear the guest source down when the peer drops.
     let st = state.clone();
@@ -134,8 +127,118 @@ pub async fn start_guest_ingest(
         .ok_or("no local description after gathering")?
         .sdp;
 
+    // Pump: poll the transceivers' receivers for tracks and forward each one's
+    // RTP. This replaces on_track, which drops the second bundled track.
+    let pump_pc = Arc::downgrade(&pc);
+    let pump_fwd = forward.clone();
+    tokio::spawn(async move {
+        let mut started: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        for _ in 0..60 {
+            let Some(pc) = pump_pc.upgrade() else { break };
+            for t in pc.get_transceivers().await {
+                let is_video = t.kind() == RTPCodecType::Video;
+                for track in t.receiver().await.tracks().await {
+                    let ssrc = track.ssrc();
+                    if ssrc == 0 || started.contains(&ssrc) {
+                        continue;
+                    }
+                    started.insert(ssrc);
+                    forward_track(
+                        track,
+                        is_video,
+                        video_port,
+                        audio_port,
+                        pump_fwd.clone(),
+                        source_id,
+                        Arc::downgrade(&pc),
+                    );
+                }
+            }
+            drop(pc);
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    });
+
     state.guest_peers.write().await.insert(source_id, pc);
+
+    // Reap the guest if it never goes live (abandoned join, or ICE never
+    // completes) so it doesn't leak an ffmpeg process, UDP ports, and a source.
+    let watchdog = state.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        let live = matches!(
+            watchdog.source_states.read().await.get(&source_id),
+            Some(muxshed_common::SourceState::Live)
+        );
+        if !live {
+            tracing::warn!("guest {} did not go live within 30s; tearing down", source_id);
+            stop_guest_ingest(&watchdog, &source_id).await;
+        }
+    });
+
     Ok(sdp)
+}
+
+/// Forward one remote track's RTP to its FFmpeg UDP port, rewriting the payload
+/// type to our fixed value. For video, also drive periodic keyframe requests.
+fn forward_track(
+    track: Arc<TrackRemote>,
+    is_video: bool,
+    video_port: u16,
+    audio_port: u16,
+    fwd: Arc<UdpSocket>,
+    source_id: Uuid,
+    pli_pc: std::sync::Weak<RTCPeerConnection>,
+) {
+    tokio::spawn(async move {
+        let kind = if is_video { "video" } else { "audio" };
+        let (pt, port) = if is_video {
+            (VP8_PT, video_port)
+        } else {
+            (OPUS_PT, audio_port)
+        };
+        tracing::info!("guest {}: forwarding {} RTP -> 127.0.0.1:{}", source_id, kind, port);
+
+        // VP8 only decodes from a keyframe — periodically request one (PLI).
+        if is_video {
+            let ssrc = track.ssrc();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    let Some(pc) = pli_pc.upgrade() else { break };
+                    if pc
+                        .write_rtcp(&[Box::new(PictureLossIndication {
+                            sender_ssrc: 0,
+                            media_ssrc: ssrc,
+                        })])
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            });
+        }
+
+        let addr = format!("127.0.0.1:{}", port);
+        let mut n: u64 = 0;
+        while let Ok((mut packet, _)) = track.read_rtp().await {
+            if n == 0 {
+                tracing::info!(
+                    "guest {}: first {} RTP packet (pt {}) -> :{}",
+                    source_id, kind, packet.header.payload_type, port
+                );
+            }
+            packet.header.payload_type = pt;
+            if let Ok(raw) = packet.marshal() {
+                if fwd.send_to(&raw, &addr).await.is_err() {
+                    break;
+                }
+            }
+            n += 1;
+        }
+        tracing::info!("guest {}: {} track ended after {} packets", source_id, kind, n);
+    });
 }
 
 async fn build_peer(state: &AppState) -> Result<Arc<RTCPeerConnection>, String> {
@@ -188,7 +291,6 @@ async fn build_peer(state: &AppState) -> Result<Arc<RTCPeerConnection>, String> 
             urls: s.urls,
             username: s.username.unwrap_or_default(),
             credential: s.credential.unwrap_or_default(),
-            ..Default::default()
         })
         .collect();
     let config = RTCConfiguration {
@@ -246,6 +348,10 @@ async fn start_ffmpeg(
         "-loglevel", "warning",
         "-protocol_whitelist", "file,crypto,data,rtp,udp",
         "-fflags", "+genpts",
+        // VP8 over RTP only reveals its frame size once a keyframe is decoded;
+        // give ffmpeg time to find one instead of dropping the video stream.
+        "-analyzeduration", "10000000",
+        "-probesize", "10000000",
         "-i", &sdp_arg,
         "-vf", &vf,
         "-c:v", "libx264",
