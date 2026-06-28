@@ -39,13 +39,17 @@ fn build_filter_graph(layers: &[CompLayer], width: u32, height: u32, fps: u32) -
     let mut graph = vec![format!("color=c=black:s={}x{}:r={}[base]", width, height, fps)];
     let mut prev = "base".to_string();
     for (i, layer) in layers.iter().enumerate() {
+        // setpts=PTS-STARTPTS rebases each live source to a 0-based clock. Each
+        // source has its own timestamp epoch (one running for minutes, a freshly
+        // added image starting near zero); without rebasing, overlay's framesync
+        // can't pair frames across layers and the graph stalls with no output.
         if layer.opacity < 0.999 {
             graph.push(format!(
-                "[{}:v]scale={}:{},format=yuva420p,colorchannelmixer=aa={:.3}[l{}]",
+                "[{}:v]setpts=PTS-STARTPTS,scale={}:{},format=yuva420p,colorchannelmixer=aa={:.3}[l{}]",
                 i, layer.w, layer.h, layer.opacity, i
             ));
         } else {
-            graph.push(format!("[{}:v]scale={}:{}[l{}]", i, layer.w, layer.h, i));
+            graph.push(format!("[{}:v]setpts=PTS-STARTPTS,scale={}:{}[l{}]", i, layer.w, layer.h, i));
         }
         let out = format!("s{}", i);
         graph.push(format!(
@@ -111,6 +115,15 @@ pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Res
         "warning".into(),
     ];
     for p in &ports {
+        // Bound input probing. A near-static layer (e.g. a still image) has such
+        // a low bitrate that ffmpeg's default probesize/analyzeduration is never
+        // satisfied, so the input never finishes opening and the whole graph
+        // stalls with no output. The primed sequence header gives codec params
+        // immediately, so we can analyze briefly and proceed.
+        args.push("-analyzeduration".into());
+        args.push("500000".into());
+        args.push("-probesize".into());
+        args.push("500000".into());
         args.push("-f".into());
         args.push("flv".into());
         args.push("-i".into());
@@ -362,7 +375,7 @@ mod tests {
         let (g, out) = build_filter_graph(&[layer(0, 0, 1920, 1080, 1.0)], 1920, 1080, 30);
         assert_eq!(out, "s0");
         assert!(g.starts_with("color=c=black:s=1920x1080:r=30[base]"));
-        assert!(g.contains("[0:v]scale=1920:1080[l0]"));
+        assert!(g.contains("[0:v]setpts=PTS-STARTPTS,scale=1920:1080[l0]"));
         assert!(g.contains("[base][l0]overlay=x=0:y=0:eof_action=pass[s0]"));
         // opaque layer must NOT get an alpha multiply
         assert!(!g.contains("colorchannelmixer"));
@@ -375,7 +388,7 @@ mod tests {
             1920, 1080, 30,
         );
         assert_eq!(out, "s1");
-        assert!(g.contains("[1:v]scale=640:360[l1]"));
+        assert!(g.contains("[1:v]setpts=PTS-STARTPTS,scale=640:360[l1]"));
         assert!(g.contains("[s0][l1]overlay=x=1240:y=700:eof_action=pass[s1]"));
     }
 
