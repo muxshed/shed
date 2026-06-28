@@ -4,20 +4,23 @@
 	import { api } from '$lib/api';
 	import { scenes, sources, pipelineState } from '$lib/stores/pipeline';
 	import { notify } from '$lib/notify';
-	import type { Scene, Layer } from '$lib/types';
+	import type { Scene, Layer, Asset } from '$lib/types';
 
 	const OUT_W = 1920;
 	const OUT_H = 1080;
 
 	let name = $state('');
+	let creating = $state(false);
 	let editing = $state<Scene | null>(null);
 	let selectedLayer = $state<string | null>(null);
 	let addSourceId = $state('');
 	let canvasEl = $state<HTMLDivElement | null>(null);
+	let assets = $state<Asset[]>([]);
 
 	onMount(async () => {
 		await refresh();
 		sources.set(await api.listSources());
+		assets = await api.listAssets();
 	});
 
 	async function refresh() {
@@ -39,13 +42,17 @@
 
 	async function create() {
 		if (!name.trim()) return;
+		creating = true;
 		try {
 			const s = await api.createScene(name.trim());
 			name = '';
 			await refresh();
 			editing = $scenes.find((x) => x.id === s.id) ?? null;
+			notify.success('Scene created');
 		} catch (e) {
 			notify.error(e);
+		} finally {
+			creating = false;
 		}
 	}
 
@@ -66,12 +73,19 @@
 
 	async function addLayer() {
 		if (!editing || !addSourceId) return;
-		const n = editing.layers.length;
-		const layer =
-			n === 0
-				? { source_id: addSourceId, x: 0, y: 0, width: OUT_W, height: OUT_H, z_index: 0, opacity: 1 }
-				: { source_id: addSourceId, x: 1180 - n * 30, y: 620 - n * 30, width: 640, height: 360, z_index: n, opacity: 1 };
 		try {
+			// A media-library asset (image/video) becomes a source first, then a layer.
+			let sourceId = addSourceId;
+			if (sourceId.startsWith('asset:')) {
+				const src = await api.createSourceFromAsset(sourceId.slice(6));
+				sourceId = src.id;
+				sources.set(await api.listSources());
+			}
+			const n = editing.layers.length;
+			const layer =
+				n === 0
+					? { source_id: sourceId, x: 0, y: 0, width: OUT_W, height: OUT_H, z_index: 0, opacity: 1 }
+					: { source_id: sourceId, x: 1180 - n * 30, y: 620 - n * 30, width: 640, height: 360, z_index: n, opacity: 1 };
 			await api.addLayer(editing.id, layer);
 			addSourceId = '';
 			await refresh();
@@ -168,10 +182,16 @@
 		<section class="panel">
 			<header class="panel__head">▮ Scenes</header>
 			<div class="panel__body space-y-2">
-				<form onsubmit={(e) => { e.preventDefault(); create(); }} class="flex gap-1">
-					<input bind:value={name} placeholder="New scene" class="input flex-1" />
-					<button type="submit" disabled={!name.trim()} class="btn btn--icon" aria-label="Create scene">+</button>
+				<form onsubmit={(e) => { e.preventDefault(); create(); }} class="space-y-2">
+					<div>
+						<label class="field-label" for="scene-name">Scene name</label>
+						<input id="scene-name" bind:value={name} placeholder="e.g. Intro" class="input" />
+					</div>
+					<button type="submit" disabled={creating || !name.trim()} class="btn w-full">
+						{creating ? 'Creating…' : '+ Create Scene'}
+					</button>
 				</form>
+				<div class="border-t border-border-dim pt-2"></div>
 				{#each $scenes as scene (scene.id)}
 					<button
 						onclick={() => { editing = scene; selectedLayer = null; }}
@@ -231,12 +251,23 @@
 					<!-- Add layer -->
 					<div class="flex items-end gap-2">
 						<div class="flex-1">
-							<label class="field-label" for="add-src">Add source as layer</label>
+							<label class="field-label" for="add-src">Add layer (source or image)</label>
 							<select id="add-src" bind:value={addSourceId} class="select">
-								<option value="">Select source…</option>
-								{#each $sources as s}
-									<option value={s.id}>{s.name}</option>
-								{/each}
+								<option value="">Select source or image…</option>
+								{#if $sources.length > 0}
+									<optgroup label="Sources">
+										{#each $sources as s}
+											<option value={s.id}>{s.name}</option>
+										{/each}
+									</optgroup>
+								{/if}
+								{#if assets.length > 0}
+									<optgroup label="Media Library">
+										{#each assets as a}
+											<option value="asset:{a.id}">{a.name}</option>
+										{/each}
+									</optgroup>
+								{/if}
 							</select>
 						</div>
 						<button onclick={addLayer} disabled={!addSourceId} class="btn">+ Add Layer</button>
