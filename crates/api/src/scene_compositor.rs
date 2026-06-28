@@ -32,6 +32,31 @@ struct CompLayer {
     opacity: f32,
 }
 
+/// Build the ffmpeg `filter_complex` that composites the layers (bottom-first)
+/// onto a black canvas, and return `(graph, final_video_label)`. Opaque layers
+/// are scaled then overlaid; semi-transparent layers also get an alpha multiply.
+fn build_filter_graph(layers: &[CompLayer], width: u32, height: u32, fps: u32) -> (String, String) {
+    let mut graph = vec![format!("color=c=black:s={}x{}:r={}[base]", width, height, fps)];
+    let mut prev = "base".to_string();
+    for (i, layer) in layers.iter().enumerate() {
+        if layer.opacity < 0.999 {
+            graph.push(format!(
+                "[{}:v]scale={}:{},format=yuva420p,colorchannelmixer=aa={:.3}[l{}]",
+                i, layer.w, layer.h, layer.opacity, i
+            ));
+        } else {
+            graph.push(format!("[{}:v]scale={}:{}[l{}]", i, layer.w, layer.h, i));
+        }
+        let out = format!("s{}", i);
+        graph.push(format!(
+            "[{}][l{}]overlay=x={}:y={}:eof_action=pass[{}]",
+            prev, i, layer.x, layer.y, out
+        ));
+        prev = out;
+    }
+    (graph.join(";"), prev)
+}
+
 /// Start (or restart) the compositor for a scene and publish to its media relay.
 /// Only layers whose source is currently live are included.
 pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Result<(), String> {
@@ -98,33 +123,13 @@ pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Res
     args.push("anullsrc=r=48000:cl=stereo".into());
 
     // Build the filter graph: black canvas, then scale + overlay each layer.
-    let mut graph = vec![format!(
-        "color=c=black:s={}x{}:r={}[base]",
-        cfg.width, cfg.height, cfg.fps
-    )];
-    let mut prev = "base".to_string();
-    for (i, layer) in layers.iter().enumerate() {
-        if layer.opacity < 0.999 {
-            graph.push(format!(
-                "[{}:v]scale={}:{},format=yuva420p,colorchannelmixer=aa={:.3}[l{}]",
-                i, layer.w, layer.h, layer.opacity, i
-            ));
-        } else {
-            graph.push(format!("[{}:v]scale={}:{}[l{}]", i, layer.w, layer.h, i));
-        }
-        let out = format!("s{}", i);
-        graph.push(format!(
-            "[{}][l{}]overlay=x={}:y={}:eof_action=pass[{}]",
-            prev, i, layer.x, layer.y, out
-        ));
-        prev = out;
-    }
+    let (filter, final_label) = build_filter_graph(&layers, cfg.width, cfg.height, cfg.fps);
     let audio_idx = layers.len();
 
     args.push("-filter_complex".into());
-    args.push(graph.join(";"));
+    args.push(filter);
     args.push("-map".into());
-    args.push(format!("[{}]", prev));
+    args.push(format!("[{}]", final_label));
     args.push("-map".into());
     args.push(format!("{}:a", audio_idx));
 
@@ -342,4 +347,54 @@ async fn load_output_config(state: &AppState) -> OutputConfig {
         .flatten()
         .and_then(|(json,)| serde_json::from_str(&json).ok())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn layer(x: i32, y: i32, w: u32, h: u32, opacity: f32) -> CompLayer {
+        CompLayer { source_id: Uuid::nil(), x, y, w, h, opacity }
+    }
+
+    #[test]
+    fn single_opaque_layer() {
+        let (g, out) = build_filter_graph(&[layer(0, 0, 1920, 1080, 1.0)], 1920, 1080, 30);
+        assert_eq!(out, "s0");
+        assert!(g.starts_with("color=c=black:s=1920x1080:r=30[base]"));
+        assert!(g.contains("[0:v]scale=1920:1080[l0]"));
+        assert!(g.contains("[base][l0]overlay=x=0:y=0:eof_action=pass[s0]"));
+        // opaque layer must NOT get an alpha multiply
+        assert!(!g.contains("colorchannelmixer"));
+    }
+
+    #[test]
+    fn pip_layer_is_positioned_and_scaled() {
+        let (g, out) = build_filter_graph(
+            &[layer(0, 0, 1920, 1080, 1.0), layer(1240, 700, 640, 360, 1.0)],
+            1920, 1080, 30,
+        );
+        assert_eq!(out, "s1");
+        assert!(g.contains("[1:v]scale=640:360[l1]"));
+        assert!(g.contains("[s0][l1]overlay=x=1240:y=700:eof_action=pass[s1]"));
+    }
+
+    #[test]
+    fn semi_transparent_layer_gets_alpha() {
+        let (g, _) = build_filter_graph(&[layer(40, 40, 480, 270, 0.5)], 1920, 1080, 30);
+        assert!(g.contains("format=yuva420p,colorchannelmixer=aa=0.500"));
+    }
+
+    #[test]
+    fn z_order_chains_overlays_in_input_order() {
+        let (g, out) = build_filter_graph(
+            &[layer(0, 0, 100, 100, 1.0), layer(0, 0, 100, 100, 1.0), layer(0, 0, 100, 100, 1.0)],
+            1280, 720, 25,
+        );
+        assert_eq!(out, "s2");
+        // each overlay chains onto the previous step
+        assert!(g.contains("[base][l0]overlay"));
+        assert!(g.contains("[s0][l1]overlay"));
+        assert!(g.contains("[s1][l2]overlay"));
+    }
 }
