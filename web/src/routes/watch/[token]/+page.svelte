@@ -34,12 +34,16 @@
 	let passwordError = $state<string | null>(null);
 
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
+	// Track the live edge so a stream restart (new playlist, segments reset) forces
+	// a clean re-attach instead of hls.js latching onto deleted segments.
+	let wasLive = false;
 
 	const accent = $derived(info?.accent || 'var(--color-amber)');
 	const playlistUrl = $derived(`/api/v1/public/channel/${token}/index.m3u8`);
 
 	onMount(() => {
 		fetchInfo(true);
+		startPolling();
 		const onFs = () => (isFullscreen = !!document.fullscreenElement);
 		document.addEventListener('fullscreenchange', onFs);
 		return () => {
@@ -74,6 +78,12 @@
 			}
 
 			if (data.live) {
+				// Rising edge (offline→live): the stream restarted with a fresh playlist
+				// and reset segment sequence, so drop any stale player and reload.
+				if (!wasLive) {
+					playing = false;
+					destroyHls();
+				}
 				// Live: (re)attach whenever we're allowed to watch but aren't playing yet.
 				// Retried on every poll so a failed first attempt (segments not ready) recovers.
 				if (unlocked && !playing) attachPlayer();
@@ -82,8 +92,8 @@
 				playing = false;
 				destroyHls();
 				streamOffline = true;
-				startPolling();
 			}
+			wasLive = data.live;
 		} catch {
 			loadError = 'Network error loading channel.';
 		} finally {
@@ -159,7 +169,8 @@
 			attaching = false;
 			playing = true;
 			streamOffline = false;
-			stopPolling();
+			// Keep polling so a stream restart (offline→live edge) is detected and
+			// triggers a clean re-attach instead of stalling on deleted segments.
 			el.play().catch(() => {});
 		};
 

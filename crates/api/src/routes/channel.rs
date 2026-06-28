@@ -298,11 +298,20 @@ fn cookie_present(headers: &HeaderMap, name: &str, expected: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Live = the HLS playlist was written within the last few seconds. This is true
+/// only while ffmpeg is actively segmenting, so it's correct for both a stale
+/// playlist left on disk after a stream ends and an ffmpeg handle that has died.
 async fn hls_live(state: &AppState, token: &str) -> bool {
     let config = state.config.read().await;
     let path = config.data_dir.join("hls").join(token).join("index.m3u8");
     drop(config);
-    tokio::fs::metadata(&path).await.is_ok()
+    tokio::fs::metadata(&path)
+        .await
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.elapsed().ok())
+        .map(|e| e < std::time::Duration::from_secs(12))
+        .unwrap_or(false)
 }
 
 pub async fn public_info(
