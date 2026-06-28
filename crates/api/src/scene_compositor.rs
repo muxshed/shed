@@ -78,7 +78,22 @@ pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Res
     let mut layers = Vec::new();
     for (sid, x, y, w, h, _z, op) in rows {
         if let Ok(source_id) = sid.parse::<Uuid>() {
-            if state.get_media_relay(&source_id).await.is_some() {
+            // A layer is only safe to composite if its source is actually
+            // producing video. overlay needs a first frame from every input;
+            // a source that has a relay but no frames (e.g. a browser source
+            // whose page never rendered) would otherwise stall the entire graph
+            // and black out the whole program. Require a cached video sequence
+            // header — proof the source has emitted decodable video — and skip
+            // the layer otherwise.
+            let has_relay = state.get_media_relay(&source_id).await.is_some();
+            let has_video = state
+                .sequence_headers
+                .read()
+                .await
+                .get(&source_id)
+                .map(|h| h.video.is_some())
+                .unwrap_or(false);
+            if has_relay && has_video {
                 layers.push(CompLayer {
                     source_id,
                     x: x as i32,
@@ -87,6 +102,11 @@ pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Res
                     h: (h as u32).max(2),
                     opacity: op as f32,
                 });
+            } else {
+                tracing::warn!(
+                    "compositor: skipping layer {} (relay={}, video={}) — not producing video",
+                    source_id, has_relay, has_video
+                );
             }
         }
     }
