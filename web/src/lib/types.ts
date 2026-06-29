@@ -157,6 +157,13 @@ export interface OutputConfig {
 	fps: number;
 }
 
+export interface FailoverConfig {
+	enabled: boolean;
+	fallback_source_id: string | null;
+	offline_grace_ms: number;
+	recovery_grace_ms: number;
+}
+
 export interface IceServer {
 	urls: string[];
 	username?: string;
@@ -229,4 +236,8 @@ export type WsEvent =
 	| { type: 'recording_state'; payload: { recording: boolean; path?: string } }
 	| { type: 'transition_started'; payload: { stinger_id: string; target_scene_id: string } }
 	| { type: 'transition_complete'; payload: { scene_id: string } }
+	| {
+			type: 'failover_state';
+			payload: { active: boolean; fallback_source_id: string | null; intent_source_id: string | null };
+	  }
 	| { type: 'error'; payload: { message: string; code: string } };

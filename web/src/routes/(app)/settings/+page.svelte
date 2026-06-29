@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
 	import { notify } from '$lib/notify';
-	import type { User } from '$lib/types';
+	import type { User, Source, FailoverConfig } from '$lib/types';
 
 	// Password change
 	let currentPassword = $state('');
@@ -24,10 +24,41 @@
 	// Screen effects
 	let fxOff = $state(false);
 
+	// Program failover
+	let failover = $state<FailoverConfig>({
+		enabled: false,
+		fallback_source_id: null,
+		offline_grace_ms: 3000,
+		recovery_grace_ms: 3000,
+	});
+	let sources = $state<Source[]>([]);
+	let failoverSaving = $state(false);
+
 	onMount(async () => {
 		fxOff = localStorage.getItem('muxshed-fx') === 'off';
 		await refreshUsers();
+		try {
+			[failover, sources] = await Promise.all([api.getFailover(), api.listSources()]);
+		} catch (e) {
+			notify.error(e);
+		}
 	});
+
+	async function saveFailover() {
+		failoverSaving = true;
+		try {
+			failover = await api.setFailover({
+				...failover,
+				offline_grace_ms: Math.max(500, Math.round(failover.offline_grace_ms)),
+				recovery_grace_ms: Math.max(500, Math.round(failover.recovery_grace_ms)),
+			});
+			notify.success('Failover settings saved');
+		} catch (e) {
+			notify.error(e);
+		} finally {
+			failoverSaving = false;
+		}
+	}
 
 	function toggleFx() {
 		fxOff = !fxOff;
@@ -238,6 +269,56 @@
 				<p><span class="text-amber">Write</span> — Stream control: go live, switch sources, manage destinations</p>
 				<p><span class="text-amber">Read</span> — View only: monitor studio, see stats</p>
 			</div>
+		</div>
+	</section>
+
+	<!-- Program failover -->
+	<section class="panel">
+		<header class="panel__head">▮ Program Failover</header>
+		<div class="panel__body">
+			<p class="mb-3 text-xs text-amber-dim leading-relaxed">
+				If the live program output goes offline (e.g. an IRL stream drops), automatically
+				switch to a fallback source so your destinations don't disconnect — then switch back
+				when the main source returns.
+			</p>
+			<div class="row mb-3">
+				<div>
+					<span class="text-amber">Enable failover</span>
+					<p class="text-xs text-amber-dim">Auto-switch to the fallback when program goes dark.</p>
+				</div>
+				<button
+					onclick={() => { failover.enabled = !failover.enabled; saveFailover(); }}
+					class="btn {failover.enabled ? 'btn--go' : ''}"
+				>
+					{failover.enabled ? '● On' : '○ Off'}
+				</button>
+			</div>
+
+			<label class="field-label" for="fo-src">Fallback source</label>
+			<select id="fo-src" bind:value={failover.fallback_source_id} class="select mb-3 w-full">
+				<option value={null}>— Select a source —</option>
+				{#each sources as s}
+					<option value={s.id}>{s.name}</option>
+				{/each}
+			</select>
+			<p class="mb-3 text-[11px] text-amber-muted">
+				A "be right back" image/video (upload it in the Library, add it as a source) or a backup
+				live ingress.
+			</p>
+
+			<div class="grid grid-cols-2 gap-3">
+				<div>
+					<label class="field-label" for="fo-off">Offline after (ms)</label>
+					<input id="fo-off" type="number" min="500" step="500" bind:value={failover.offline_grace_ms} class="input" />
+				</div>
+				<div>
+					<label class="field-label" for="fo-rec">Recover after (ms)</label>
+					<input id="fo-rec" type="number" min="500" step="500" bind:value={failover.recovery_grace_ms} class="input" />
+				</div>
+			</div>
+			<button onclick={saveFailover} disabled={failoverSaving} class="btn btn--go mt-3">
+				{failoverSaving ? 'Saving…' : 'Save failover settings'}
+			</button>
 		</div>
 	</section>
 

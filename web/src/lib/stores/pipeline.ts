@@ -8,6 +8,11 @@ export const sources = writable<Source[]>([]);
 export const destinations = writable<Destination[]>([]);
 export const scenes = writable<Scene[]>([]);
 export const recordingState = writable<RecordingState>({ recording: false });
+export const failover = writable<{
+	active: boolean;
+	fallback_source_id: string | null;
+	intent_source_id: string | null;
+}>({ active: false, fallback_source_id: null, intent_source_id: null });
 
 export const isLive = derived(pipelineState, ($s) => $s.state === 'live');
 export const isTransitioning = derived(

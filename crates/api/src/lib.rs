@@ -3,6 +3,7 @@
 pub mod auth;
 pub mod channel_hls;
 pub mod egress;
+pub mod failover;
 pub mod guest_webrtc;
 pub mod media_player;
 pub mod media_probe;

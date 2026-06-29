@@ -183,6 +183,32 @@ pub struct RecordingState {
     pub started_at: Option<DateTime<Utc>>,
 }
 
+/// Program failover: when the live program output stops producing video, the
+/// program is automatically switched to a fallback source (a BRB image/video or
+/// a backup ingress) so destinations don't drop, then switched back on recovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailoverConfig {
+    pub enabled: bool,
+    /// Source shown while the program is offline. Any source: an image/video
+    /// asset (a "be right back" card) or a backup live ingress.
+    pub fallback_source_id: Option<Uuid>,
+    /// How long the program must produce no video before failing over.
+    pub offline_grace_ms: u64,
+    /// How long the program must be producing video again before switching back.
+    pub recovery_grace_ms: u64,
+}
+
+impl Default for FailoverConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            fallback_source_id: None,
+            offline_grace_ms: 3000,
+            recovery_grace_ms: 3000,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelConfig {
     pub enabled: bool,

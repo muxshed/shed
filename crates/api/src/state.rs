@@ -35,8 +35,15 @@ pub struct AppState {
     pub channel_hls: ChannelHls,
     /// Program output — the channel that egress and preview-program read from
     pub program_tx: broadcast::Sender<Bytes>,
-    /// Which source provides video to program
+    /// The source actually routed to program. Written by the failover supervisor,
+    /// read by the program router. During a failover this is the fallback source.
     pub program_source: watch::Sender<Option<Uuid>>,
+    /// The operator's selected program source. The failover supervisor mirrors
+    /// this to `program_source` when it is live, or substitutes the fallback when
+    /// it goes offline. All operator-facing switches set this, not program_source.
+    pub program_intent: watch::Sender<Option<Uuid>>,
+    /// Whether a failover is currently engaged (program is on the fallback).
+    pub failover_active: watch::Sender<bool>,
     /// Which source is in preview (next to go live)
     pub preview_source: RwLock<Option<Uuid>>,
     /// Audio routing: which sources are providing audio and at what level

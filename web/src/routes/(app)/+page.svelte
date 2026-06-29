@@ -10,6 +10,7 @@
 		isLive,
 		isRecording,
 		recordingState,
+		failover,
 	} from '$lib/stores/pipeline';
 	import type { StingerConfig, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset } from '$lib/types';
 	import StatusIndicator from '../../components/StatusIndicator.svelte';
@@ -259,6 +260,15 @@
 </script>
 
 <div class="mx-auto max-w-[1400px]">
+	{#if $failover.active}
+		{@const fbName = $sources.find((s) => s.id === $failover.fallback_source_id)?.name ?? 'fallback'}
+		{@const mainName = $sources.find((s) => s.id === $failover.intent_source_id)?.name ?? 'your source'}
+		<div class="mb-3 flex items-center gap-3 rounded border border-warning bg-warning/10 px-4 py-2 text-warning" role="status">
+			<span class="led text-[16px] animate-pulse">⚠ FAILOVER ACTIVE</span>
+			<span class="text-xs">{mainName} is offline — broadcasting <strong>{fbName}</strong>. Will switch back automatically when it returns.</span>
+		</div>
+	{/if}
+
 	<!-- Header -->
 	<div class="mb-4 flex items-center justify-between border-b border-border pb-3">
 		<h1 class="text-[13px] tracking-widest text-amber-bright">STUDIO</h1>
