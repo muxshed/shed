@@ -13,11 +13,20 @@ use uuid::Uuid;
 use crate::routes::output::OutputStats;
 use crate::rtmp::flv;
 
+type RestartParams = (
+    Vec<Destination>,
+    broadcast::Sender<Bytes>,
+    Option<crate::routes::output::OutputConfig>,
+);
+
 pub struct EgressManager {
     processes: Arc<Mutex<HashMap<Uuid, EgressProcess>>>,
     ws_tx: broadcast::Sender<WsEvent>,
     bytes_sent: Arc<std::sync::atomic::AtomicU64>,
     started_at: Arc<Mutex<Option<std::time::Instant>>>,
+    /// The most recent start() params, so the egress can be cleanly restarted
+    /// (e.g. on a program failover splice) with a fresh encoder.
+    restart_params: Arc<Mutex<Option<RestartParams>>>,
 }
 
 struct EgressProcess {
@@ -32,7 +41,27 @@ impl EgressManager {
             ws_tx,
             bytes_sent: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             started_at: Arc::new(Mutex::new(None)),
+            restart_params: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Restart the egress with the params from the last start(), priming with the
+    /// given source's sequence headers. Used when the program splices to a new
+    /// source (failover) — a fresh encoder produces a clean stream and reconnects
+    /// the destination, instead of the running encoder choking on the splice.
+    pub async fn restart(&self, seq_headers: Option<crate::state::SequenceHeaders>) {
+        let params = self.restart_params.lock().await.clone();
+        let Some((destinations, media_tx, output_config)) = params else {
+            return;
+        };
+        tracing::info!("restarting egress with a fresh encoder (program splice)");
+        self.stop().await;
+        // Let the old RTMP session fully close before reopening the same stream
+        // key (some platforms reject a second publisher on an already-open key).
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        let _ = self
+            .start(Uuid::nil(), destinations, media_tx, output_config, seq_headers)
+            .await;
     }
 
     pub async fn start(
@@ -45,6 +74,8 @@ impl EgressManager {
     ) -> Result<(), String> {
         self.bytes_sent.store(0, std::sync::atomic::Ordering::Relaxed);
         *self.started_at.lock().await = Some(std::time::Instant::now());
+        *self.restart_params.lock().await =
+            Some((destinations.clone(), media_tx.clone(), output_config.clone()));
         let mut procs = self.processes.lock().await;
 
         for dest in &destinations {
@@ -158,6 +189,12 @@ impl EgressManager {
                     if let Some(ref audio) = seq.audio {
                         let _ = stdin.write_all(audio).await;
                         bytes_written += audio.len() as u64;
+                    }
+                    // Prime with the last keyframe so a freshly (re)started encoder
+                    // can decode immediately instead of waiting for the next one.
+                    if let Some(ref keyframe) = seq.last_keyframe {
+                        let _ = stdin.write_all(keyframe).await;
+                        bytes_written += keyframe.len() as u64;
                     }
                 }
 
