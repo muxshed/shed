@@ -3,6 +3,7 @@
 mod assets;
 mod audio;
 mod auth;
+mod failover;
 mod broadcast;
 mod channel;
 mod preview;
@@ -92,6 +93,7 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         .route("/destinations/{id}/disable", post(destinations::disable))
         // Output config and stats
         .route("/output/config", get(output::get_config).put(output::set_config))
+        .route("/failover", get(failover::get_config).put(failover::set_config))
         .route(
             "/webrtc/config",
             get(webrtc_config::get_config).put(webrtc_config::set_config),

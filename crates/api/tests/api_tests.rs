@@ -22,6 +22,8 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
     let (ws_tx, _) = broadcast::channel::<WsEvent>(64);
     let (program_tx, _) = broadcast::channel::<bytes::Bytes>(64);
     let (program_source_tx, _) = tokio::sync::watch::channel::<Option<uuid::Uuid>>(None);
+    let (program_intent_tx, _) = tokio::sync::watch::channel::<Option<uuid::Uuid>>(None);
+    let (failover_active_tx, _) = tokio::sync::watch::channel::<bool>(false);
     let (audio_routing_tx, _) = tokio::sync::watch::channel(muxshed_api::state::AudioRouting::default());
     let pipeline = Arc::new(StubPipelineController::new(ws_tx.clone()));
 
@@ -66,6 +68,8 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         browser_sources: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         program_tx,
         program_source: program_source_tx,
+        program_intent: program_intent_tx,
+        failover_active: failover_active_tx,
         preview_source: tokio::sync::RwLock::new(None),
         audio_routing: audio_routing_tx,
         system_token: None,

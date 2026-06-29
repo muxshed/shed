@@ -1,6 +1,6 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
-import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, LayerFit, RecordingState, StingerConfig, StingerAudio, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig, WebrtcConfig } from './types';
+import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, LayerFit, RecordingState, StingerConfig, StingerAudio, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig, WebrtcConfig, FailoverConfig } from './types';
 
 function getSessionToken(): string {
 	if (typeof window === 'undefined') return '';
@@ -141,6 +141,10 @@ export const api = {
 	getOutputConfig: () => request<OutputConfig>('/output/config'),
 	setOutputConfig: (config: OutputConfig) =>
 		request<OutputConfig>('/output/config', { method: 'PUT', body: JSON.stringify(config) }),
+
+	getFailover: () => request<FailoverConfig>('/failover'),
+	setFailover: (config: FailoverConfig) =>
+		request<FailoverConfig>('/failover', { method: 'PUT', body: JSON.stringify(config) }),
 	getOutputStats: () => request<OutputStats>('/output/stats'),
 
 	// WebRTC / guest ICE config

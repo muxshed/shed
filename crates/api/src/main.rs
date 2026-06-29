@@ -81,6 +81,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (ws_tx, _) = broadcast::channel::<WsEvent>(256);
     let (program_tx, _) = broadcast::channel::<bytes::Bytes>(4096);
     let (program_source_tx, _program_source_rx) = watch::channel::<Option<uuid::Uuid>>(None);
+    let (program_intent_tx, _program_intent_rx) = watch::channel::<Option<uuid::Uuid>>(None);
+    let (failover_active_tx, _failover_active_rx) = watch::channel::<bool>(false);
     let saved_audio_routing: muxshed_api::state::AudioRouting = sqlx::query_as::<_, (String,)>(
         "SELECT value FROM settings WHERE key = 'audio_routing'",
     )
@@ -117,6 +119,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         browser_sources: RwLock::new(std::collections::HashMap::new()),
         program_tx,
         program_source: program_source_tx,
+        program_intent: program_intent_tx,
+        failover_active: failover_active_tx,
         preview_source: RwLock::new(None),
         audio_routing: audio_routing_tx,
         system_token,
@@ -174,6 +178,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let program_state = state.clone();
     tokio::spawn(async move {
         run_program_router(program_state).await;
+    });
+
+    // Failover supervisor: mirrors the operator's program intent to the routed
+    // program source, substituting the configured fallback when the program
+    // goes offline and restoring it on recovery.
+    let failover_state = state.clone();
+    tokio::spawn(async move {
+        muxshed_api::failover::run_failover_supervisor(failover_state).await;
     });
 
     let rtmp_state = state.clone();

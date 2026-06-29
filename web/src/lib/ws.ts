@@ -1,6 +1,6 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
-import { pipelineState, sources, destinations, recordingState } from './stores/pipeline';
+import { pipelineState, sources, destinations, recordingState, failover } from './stores/pipeline';
 import type { WsEvent } from './types';
 
 let ws: WebSocket | null = null;
@@ -85,6 +85,13 @@ function handleEvent(event: WsEvent) {
 			recordingState.set({
 				recording: event.payload.recording,
 				path: event.payload.path,
+			});
+			break;
+		case 'failover_state':
+			failover.set({
+				active: event.payload.active,
+				fallback_source_id: event.payload.fallback_source_id,
+				intent_source_id: event.payload.intent_source_id,
 			});
 			break;
 	}

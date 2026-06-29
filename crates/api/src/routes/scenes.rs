@@ -174,7 +174,7 @@ pub async fn activate(
     crate::scene_compositor::start_scene_compositor(state.clone(), scene_uuid)
         .await
         .map_err(|e| MuxshedError::BadRequest(format!("cannot activate scene: {}", e)))?;
-    let _ = state.program_source.send(Some(scene_uuid));
+    let _ = state.program_intent.send(Some(scene_uuid));
     state.pipeline.activate_scene(&scene_uuid).await?;
 
     let _ = state.ws_tx.send(WsEvent::SceneChanged {
@@ -189,7 +189,7 @@ pub async fn activate(
 /// to its layers take effect immediately).
 async fn refresh_if_active(state: &Arc<AppState>, scene_id: &str) {
     if let Ok(uuid) = scene_id.parse::<Uuid>() {
-        if *state.program_source.borrow() == Some(uuid) {
+        if *state.program_intent.borrow() == Some(uuid) {
             let _ = crate::scene_compositor::start_scene_compositor(state.clone(), uuid).await;
         }
     }

@@ -124,7 +124,7 @@ pub async fn start(
     }
 
     // THEN set program source — program router wakes up and starts forwarding
-    let _ = state.program_source.send(Some(source_id));
+    let _ = state.program_intent.send(Some(source_id));
     tracing::info!("program source set to {}", source_id);
 
     if saved_config.auto_record {
@@ -157,7 +157,7 @@ pub async fn stop(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiE
 
     state.egress.stop().await;
     state.channel_hls.stop().await;
-    let _ = state.program_source.send(None);
+    let _ = state.program_intent.send(None);
     let _ = state.pipeline.stop_recording().await;
     state.pipeline.stop().await?;
 
