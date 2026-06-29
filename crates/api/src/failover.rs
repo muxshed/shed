@@ -141,6 +141,7 @@ async fn monitor(
                     );
                     ensure_fallback_running(state, fallback).await;
                     route(state, Some(fallback));
+                    restart_egress(state, fallback).await;
                     showing_fallback = true;
                     recovering_since = None;
                     set_failover(state, true, Some(fallback), Some(intended)).await;
@@ -152,6 +153,7 @@ async fn monitor(
                         if now.duration_since(since) > recovery {
                             tracing::info!("failover: program source {} recovered -> restoring", intended);
                             route(state, Some(intended));
+                            restart_egress(state, intended).await;
                             showing_fallback = false;
                             recovering_since = None;
                             set_failover(state, false, Some(fallback), Some(intended)).await;
@@ -160,6 +162,16 @@ async fn monitor(
                 }
             }
         }
+    }
+}
+
+/// When live, restart the egress with a fresh encoder so the destination gets a
+/// clean stream across the program splice (a single long-running encoder chokes
+/// on a mid-stream source change). No-op in studio mode (egress not running).
+async fn restart_egress(state: &AppState, source: Uuid) {
+    if state.egress.is_running().await {
+        let seq = state.sequence_headers.read().await.get(&source).cloned();
+        state.egress.restart(seq).await;
     }
 }
 
