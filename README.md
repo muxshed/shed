@@ -1,4 +1,4 @@
-<img src=".github/images/logo.png" alt="Muxshed" width="280" />
+<img src=".github/images/logo.svg" alt="Muxshed" width="300" />
 
 # Muxshed
 
@@ -18,11 +18,18 @@ This started years ago as a passion project to understand the complexities of mu
 
 - RTMP and SRT ingest from OBS, encoders, or any streaming software
 - Fan-out to YouTube, Twitch, Kick, and any custom RTMP/RTMPS endpoint
+- **Program failover** — when your source goes offline (e.g. an IRL stream drops), the
+  program automatically switches to a fallback source (a "be right back" image/video or a
+  backup ingress) so your destinations stay connected, then switches back when it returns
 - **Public watch page** — broadcast to your own self-hosted, unlisted `/watch/<token>`
   page with optional viewer password and custom branding (no external destination required)
-- Scene management with multi-layer compositor
+- Scene management with a multi-layer compositor and per-layer fit (fill / contain / cover)
+- **Browser and media sources** — add a live web page, or an image/video from the library,
+  as a scene layer
+- Audio mixer — per-source levels, mute, and audio-follows-video routing
+- Media library for images, video, and overlays
 - Stinger transitions with frame-accurate marker editing
-- Image overlays and lower thirds
+- Image overlays
 - Local recording
 - WebRTC guest links
 - API key authentication
@@ -165,7 +172,7 @@ cd system/docker
 docker compose up --build
 ```
 
-Builds the full production image with GStreamer and all plugins. Ports:
+Builds the production image (ffmpeg-based — the GStreamer feature is not built). Ports:
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
@@ -213,6 +220,8 @@ Key endpoints:
 POST   /api/v1/stream/start          Start streaming to all enabled destinations
 POST   /api/v1/stream/stop           Stop streaming
 GET    /api/v1/status                Pipeline state
+
+GET    /api/v1/failover              Program failover config (PUT to update)
 
 GET    /api/v1/sources               List sources
 POST   /api/v1/sources               Create source (auto-generates RTMP stream key)
