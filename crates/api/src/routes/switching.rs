@@ -13,18 +13,26 @@ use muxshed_common::{MuxshedError, WsEvent};
 
 #[derive(Serialize)]
 pub struct ProgramState {
+    /// The source actually being broadcast (the fallback during a failover).
     pub program_source_id: Option<Uuid>,
+    /// The operator-selected source (what they intend on program).
+    pub program_intent_id: Option<Uuid>,
     pub preview_source_id: Option<Uuid>,
+    /// True when the program is on the fallback because the intended source is offline.
+    pub failover_active: bool,
 }
 
 pub async fn get_program(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ProgramState>, ApiError> {
     let program = *state.program_source.borrow();
+    let intent = *state.program_intent.borrow();
     let preview = *state.preview_source.read().await;
     Ok(Json(ProgramState {
         program_source_id: program,
+        program_intent_id: intent,
         preview_source_id: preview,
+        failover_active: *state.failover_active.borrow(),
     }))
 }
 
@@ -66,7 +74,7 @@ pub async fn cut(
 
     // Cutting to a single source replaces any active scene composite.
     crate::scene_compositor::stop_all_compositors(&state).await;
-    let _ = state.program_source.send(Some(id));
+    let _ = state.program_intent.send(Some(id));
 
     let _ = state.ws_tx.send(WsEvent::SceneChanged {
         scene_id: id,
@@ -84,7 +92,7 @@ pub async fn auto(
     let preview_id = preview
         .ok_or_else(|| MuxshedError::BadRequest("no source in preview".to_string()))?;
 
-    let _ = state.program_source.send(Some(preview_id));
+    let _ = state.program_intent.send(Some(preview_id));
 
     // Clear preview
     let mut p = state.preview_source.write().await;

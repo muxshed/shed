@@ -35,6 +35,13 @@ pub enum WsEvent {
     TransitionComplete {
         scene_id: Uuid,
     },
+    /// Program failover engaged or cleared (main source offline -> fallback).
+    FailoverState {
+        active: bool,
+        fallback_source_id: Option<Uuid>,
+        /// The operator-selected source the failover is standing in for.
+        intent_source_id: Option<Uuid>,
+    },
     Error {
         message: String,
         code: String,
