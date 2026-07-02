@@ -853,3 +853,35 @@ async fn test_browser_source_create() {
     let resp = app.oneshot(json_request("GET", &format!("/api/v1/sources/{}", id), &key, None)).await.unwrap();
     assert_eq!(response_json(resp).await["kind"]["url"], "https://example.com/overlay");
 }
+
+#[tokio::test]
+async fn test_schedule_crud_and_timezone() {
+    let (app, key, _state) = setup().await;
+
+    // set system timezone
+    let req = json_request("PUT", "/api/v1/settings/timezone", &key, Some(r#"{"timezone":"Europe/London"}"#));
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // create a valid cron schedule
+    let body = r#"{"name":"Nightly","enabled":true,"trigger":{"kind":"cron","expr":"0 20 * * *"},"destination_ids":[],"end_behavior":"stop","items":[{"kind":"vod","ref_id":"00000000-0000-0000-0000-000000000000"}]}"#;
+    let req = json_request("POST", "/api/v1/schedules", &key, Some(body));
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let created = response_json(resp).await;
+    assert_eq!(created["name"], "Nightly");
+    assert_eq!(created["items"].as_array().unwrap().len(), 1);
+
+    // list
+    let req = json_request("GET", "/api/v1/schedules", &key, None);
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let list = response_json(resp).await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+
+    // reject bad cron
+    let bad = r#"{"name":"x","trigger":{"kind":"cron","expr":"nope nope nope"},"destination_ids":[],"items":[]}"#;
+    let req = json_request("POST", "/api/v1/schedules", &key, Some(bad));
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}

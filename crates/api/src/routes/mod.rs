@@ -13,6 +13,7 @@ mod keys;
 pub mod output;
 mod recording;
 mod scenes;
+mod schedules;
 mod setup;
 mod sources;
 mod status;
@@ -94,6 +95,12 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         // Output config and stats
         .route("/output/config", get(output::get_config).put(output::set_config))
         .route("/failover", get(failover::get_config).put(failover::set_config))
+        // Schedules
+        .route("/schedules", get(schedules::list).post(schedules::create))
+        .route("/schedules/{id}", put(schedules::update).delete(schedules::delete))
+        .route("/schedules/{id}/run", post(schedules::run_now))
+        .route("/schedules/stop", post(schedules::stop))
+        .route("/settings/timezone", get(schedules::get_timezone).put(schedules::set_timezone))
         .route(
             "/webrtc/config",
             get(webrtc_config::get_config).put(webrtc_config::set_config),
