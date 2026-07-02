@@ -209,6 +209,83 @@ impl Default for FailoverConfig {
     }
 }
 
+/// How a broadcast ends when its content finishes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum EndBehavior {
+    #[default]
+    Stop,
+    Loop,
+    Standby,
+}
+
+impl EndBehavior {
+    pub fn as_str(&self) -> &'static str {
+        match self { EndBehavior::Stop => "stop", EndBehavior::Loop => "loop", EndBehavior::Standby => "standby" }
+    }
+    pub fn from_db(s: &str) -> Self {
+        match s { "loop" => EndBehavior::Loop, "standby" => EndBehavior::Standby, _ => EndBehavior::Stop }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScheduleItemKind {
+    Vod,
+    Scene,
+    Source,
+}
+
+impl ScheduleItemKind {
+    pub fn as_str(&self) -> &'static str {
+        match self { ScheduleItemKind::Vod => "vod", ScheduleItemKind::Scene => "scene", ScheduleItemKind::Source => "source" }
+    }
+    pub fn from_db(s: &str) -> Self {
+        match s { "scene" => ScheduleItemKind::Scene, "source" => ScheduleItemKind::Source, _ => ScheduleItemKind::Vod }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TriggerKind {
+    /// One-off local datetime in the system timezone, e.g. "2026-07-02T20:00:00".
+    Once { at: String },
+    /// 5-field cron (min hour dom mon dow), evaluated in the system timezone.
+    Cron { expr: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduleItem {
+    pub id: Uuid,
+    pub position: u32,
+    pub kind: ScheduleItemKind,
+    pub ref_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Schedule {
+    pub id: Uuid,
+    pub name: String,
+    pub enabled: bool,
+    pub trigger: TriggerKind,
+    pub destination_ids: Vec<Uuid>,
+    pub standby_asset_id: Option<Uuid>,
+    pub end_behavior: EndBehavior,
+    pub until_at: Option<String>,
+    pub items: Vec<ScheduleItem>,
+    /// Computed next fire time as an RFC3339 UTC instant. None = not scheduled.
+    pub next_run_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduleRun {
+    pub id: Uuid,
+    pub schedule_id: Uuid,
+    pub started_at: Option<String>,
+    pub ended_at: Option<String>,
+    pub status: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelConfig {
     pub enabled: bool,
@@ -428,5 +505,29 @@ mod tests {
             audio_behaviour: StingerAudio::Duck(0.2),
             thumbnail_path: "/s.png".into(),
         });
+    }
+
+    #[test]
+    fn schedule_types_roundtrip() {
+        let s = Schedule {
+            id: Uuid::nil(),
+            name: "Premiere".into(),
+            enabled: true,
+            trigger: TriggerKind::Cron { expr: "0 20 * * *".into() },
+            destination_ids: vec![Uuid::nil()],
+            standby_asset_id: Some(Uuid::nil()),
+            end_behavior: EndBehavior::Stop,
+            until_at: None,
+            items: vec![ScheduleItem { id: Uuid::nil(), position: 0, kind: ScheduleItemKind::Vod, ref_id: Uuid::nil() }],
+            next_run_at: None,
+        };
+        let back: Schedule = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back.name, "Premiere");
+        assert!(matches!(back.trigger, TriggerKind::Cron { .. }));
+        assert!(matches!(back.end_behavior, EndBehavior::Stop));
+        let v = serde_json::to_value(EndBehavior::Loop).unwrap();
+        assert_eq!(v, serde_json::json!("loop"));
+        let t = serde_json::to_value(TriggerKind::Once { at: "2026-07-02T20:00:00".into() }).unwrap();
+        assert_eq!(t["kind"], "once");
     }
 }
