@@ -13,6 +13,7 @@ export const failover = writable<{
 	fallback_source_id: string | null;
 	intent_source_id: string | null;
 }>({ active: false, fallback_source_id: null, intent_source_id: null });
+export const activeSchedule = writable<{ id: string | null }>({ id: null });
 
 export const isLive = derived(pipelineState, ($s) => $s.state === 'live');
 export const isTransitioning = derived(
