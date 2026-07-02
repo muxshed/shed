@@ -14,6 +14,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+cron = "0.12"
+chrono-tz = "0.9"
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 axum = { version = "0.8", features = ["ws", "multipart"] }
