@@ -45,6 +45,7 @@ async fn run_migrations(db: &sqlx::SqlitePool) -> Result<(), Box<dyn std::error:
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = muxshed_api::routes::admin::START_TIME.set(std::time::Instant::now());
     let config = MuxshedConfig::from_env();
 
     tracing_subscriber::fmt()

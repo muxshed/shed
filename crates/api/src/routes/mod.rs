@@ -1,5 +1,6 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
+pub mod admin;
 mod assets;
 mod audio;
 mod auth;
@@ -61,7 +62,7 @@ pub fn build_router(
     web_dir: Option<std::path::PathBuf>,
     headless: bool,
 ) -> Router {
-    let api = Router::new()
+    let mut api = Router::new()
         // Sources
         .route("/sources", get(sources::list).post(sources::create))
         .route("/sources/from-asset", post(sources::create_from_asset))
@@ -199,6 +200,23 @@ pub fn build_router(
         // Public guest join (token-scoped — no auth)
         .route("/guest/{token}", get(guests::public_info))
         .route("/guest/{token}/whip", post(guests::whip));
+
+    // Privileged management group, only mounted when a management token is set.
+    // Gated by management_auth (X-Management-Token), separate from tenant keys.
+    if state.system_token.is_some() {
+        let admin_router = Router::new()
+            .route("/health", get(admin::health))
+            .route("/stats", get(admin::stats))
+            .route("/connectivity", get(admin::connectivity))
+            .route("/restart", post(admin::restart))
+            .route("/config", get(admin::get_config).put(admin::put_config))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                crate::auth::management_auth,
+            ));
+        api = api.nest("/admin", admin_router);
+        tracing::info!("management endpoints enabled at /api/v1/admin");
+    }
 
     let mut router = Router::new().nest("/api/v1", api);
 
