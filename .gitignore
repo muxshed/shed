@@ -40,3 +40,6 @@ stingers/
 
 # sqlx offline mode
 .sqlx/
+
+# Internal design docs and superpowers specs/plans live at the muxshed root, not in this public repo.
+docs/
