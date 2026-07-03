@@ -18,7 +18,7 @@ mod setup;
 mod sources;
 mod status;
 mod stingers;
-mod stream;
+pub mod stream;
 mod switching;
 pub mod webrtc_config;
 mod ws;

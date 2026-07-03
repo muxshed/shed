@@ -62,6 +62,8 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
     tokio::time::sleep(Duration::from_millis(500)).await;
     let _ = state.program_intent.send(Some(vod_source));
     crate::egress_restart_for(state, vod_source).await;
+    // Bring the public Channel watch page on air, same as a manual go-live.
+    crate::routes::stream::ensure_channel_hls(state).await;
 
     if !matches!(end_behavior, EndBehavior::Loop) {
         let dur = Duration::from_millis(playlist.total_ms.max(1000));
@@ -78,10 +80,13 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
                 if let Some(sid) = standby_id {
                     let _ = state.program_intent.send(Some(sid));
                     crate::egress_restart_for(state, sid).await;
+                    // Follow the splice so the watch page keeps playing the standby card.
+                    crate::routes::stream::ensure_channel_hls(state).await;
                 }
             }
             _ => {
                 state.egress.stop().await;
+                state.channel_hls.stop().await;
                 state.pipeline.stop().await.ok();
                 let _ = state.program_intent.send(None);
                 if let Some(sid) = standby_id {
@@ -100,6 +105,7 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
 pub async fn stop_broadcast(state: &AppState) {
     let id = *state.active_schedule.borrow();
     state.egress.stop().await;
+    state.channel_hls.stop().await;
     state.pipeline.stop().await.ok();
     let _ = state.program_intent.send(None);
     let _ = state.active_schedule.send(None);
