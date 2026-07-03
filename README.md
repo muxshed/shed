@@ -20,17 +20,17 @@ This started years ago as a passion project to understand the complexities of mu
 
 - RTMP and SRT ingest from OBS, encoders, or any streaming software
 - Fan-out to YouTube, Twitch, Kick, and any custom RTMP/RTMPS endpoint
-- **Program failover** — when your source goes offline (e.g. an IRL stream drops), the
+- **Program failover.** When your source goes offline (e.g. an IRL stream drops), the
   program automatically switches to a fallback source (a "be right back" image/video or a
   backup ingress) so your destinations stay connected, then switches back when it returns
-- **Public watch page** — broadcast to your own self-hosted, unlisted `/watch/<token>`
+- **Public watch page.** Broadcast to your own self-hosted, unlisted `/watch/<token>`
   page with optional viewer password and custom branding (no external destination required)
-- **Scheduled broadcasts** — upload videos and have them go to air on their own, at a set
+- **Scheduled broadcasts.** Upload videos and have them go to air on their own, at a set
   time or on a repeating schedule: a single premiere, a playlist, or a looping 24/7 channel
 - Scene management with a multi-layer compositor and per-layer fit (fill / contain / cover)
-- **Browser and media sources** — add a live web page, or an image/video from the library,
+- **Browser and media sources.** Add a live web page, or an image/video from the library,
   as a scene layer
-- Audio mixer — per-source levels, mute, and audio-follows-video routing
+- Audio mixer with per-source levels, mute, and audio-follows-video routing
 - Media library for images, video, and overlays
 - Stinger transitions with frame-accurate marker editing
 - Image overlays
@@ -45,20 +45,20 @@ This started years ago as a passion project to understand the complexities of mu
 
 ## Public Watch Page
 
-Every instance can broadcast its program output to a self-hosted, publicly-watchable page
-— no YouTube/Twitch required. Open the **Channel** section, set a title/logo/accent colour,
+Every instance can broadcast its program output to a self-hosted, publicly-watchable page,
+no YouTube or Twitch required. Open the **Channel** section, set a title/logo/accent colour,
 optionally add a viewer password, and share the unlisted link (`/watch/<token>`).
 
 - Streams over HLS, produced by ffmpeg, and starts automatically when you go live.
 - The watch page has a built-in player (play/pause, mute, fullscreen, plus restart and a
   seek bar for on-demand playback) and shows an `ON AIR` / `OFFLINE` state. It auto-starts
-  when the broadcast begins — no refresh needed.
+  when the broadcast begins, with no refresh needed.
 - The link is unlisted; add a password to restrict it further. Regenerate the link any
   time to revoke access.
 
 ## Scheduled Broadcasts
 
-Upload videos to the library and have them go to air on their own — no operator at the desk.
+Upload videos to the library and have them go to air on their own, with no operator at the desk.
 Open the **Schedules** section and build a schedule from one or more videos.
 
 - Fire once at a set date and time, or repeat on a cron schedule. Times are evaluated in a
@@ -77,9 +77,9 @@ Control Muxshed from hardware. Both connect to your instance over its API (host 
 and react to live state. Create an API key under **Settings → API Keys**, then enter your
 instance host and the key in the plugin/module configuration.
 
-- **[Elgato Stream Deck plugin](https://github.com/muxshed/streamdeck-plugin)** — one-press
+- **[Elgato Stream Deck plugin](https://github.com/muxshed/streamdeck-plugin)** for one-press
   Go Live, End Stream, and Record toggle.
-- **[Bitfocus Companion module](https://github.com/muxshed/companion-module-muxshed)** — go
+- **[Bitfocus Companion module](https://github.com/muxshed/companion-module-muxshed)** to go
   live, cut scenes/sources, show/hide overlays, and record, with on-air/recording
   feedback, live variables, and ready-made presets.
 
@@ -100,7 +100,7 @@ plus **ffmpeg** subprocesses for transcoding and HLS. RTMP fan-out is forwarded 
 re-encoded); the public watch page is the one transcoded output (`channel_hls.rs`).
 
 > A `GstPipelineController` exists behind a `gstreamer` Cargo feature but is **not built
-> by any image** and is effectively legacy — ffmpeg is the engine that ships.
+> by any image**, so it is effectively legacy. ffmpeg is the engine that ships.
 
 ## Requirements
 
@@ -108,7 +108,7 @@ re-encoded); the public watch page is the one transcoded output (`channel_hls.rs
 
 - Rust 1.88+ and Cargo
 - Node.js 20+ and npm
-- **ffmpeg** — required for RTMP ingest/fan-out, recording, and the public watch page (HLS)
+- **ffmpeg** for RTMP ingest/fan-out, recording, and the public watch page (HLS)
 
 ### Docker / Podman
 
@@ -158,7 +158,6 @@ Verify with `ffmpeg -version`.
 ### Source
 
 ```sh
-cd system
 ./dev.sh
 ```
 
@@ -169,7 +168,6 @@ On first run, a default API key is printed to the console. Copy it and enter it 
 ### Docker
 
 ```sh
-cd system
 ./dev-docker.sh
 ```
 
@@ -178,7 +176,6 @@ Builds a dev image (no GStreamer, stub controller, debug logging) and starts on 
 ### Podman
 
 ```sh
-cd system
 ./dev-podman.sh
 ```
 
@@ -187,11 +184,11 @@ Same as Docker but uses `podman compose`.
 ### Production Docker
 
 ```sh
-cd system/docker
+cd docker
 docker compose up --build
 ```
 
-Builds the production image (ffmpeg-based — the GStreamer feature is not built). Ports:
+Builds the production image (ffmpeg-based; the GStreamer feature is not built). Ports:
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
@@ -217,8 +214,6 @@ All configuration is via environment variables. See `.env.example` for the full 
 ## Running Tests
 
 ```sh
-cd system
-
 # Rust tests (API integration tests)
 cargo test --workspace
 
