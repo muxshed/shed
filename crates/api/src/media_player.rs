@@ -85,6 +85,9 @@ pub async fn start_media_playback(
             "128k".into(),
             "-ar".into(),
             "48000".into(),
+            // Downmix to stereo: the native AAC encoder rejects 5.1/6-channel input.
+            "-ac".into(),
+            "2".into(),
         ]);
     }
 
@@ -141,6 +144,91 @@ pub async fn start_media_playback(
         feed_relay(source_id, stdout, relay_tx, state_clone).await;
     });
 
+    Ok(())
+}
+
+/// Play a playlist of video files as one seamless stream into the source's
+/// relay. Files are concatenated via ffmpeg's concat demuxer and scaled/padded
+/// to the output canvas so mixed-resolution VODs join cleanly. `loop_forever`
+/// repeats the whole playlist (a 24-7 channel).
+pub async fn start_concat_playback(
+    state: Arc<AppState>,
+    source_id: Uuid,
+    files: &[std::path::PathBuf],
+    loop_forever: bool,
+    width: u32,
+    height: u32,
+    fps: u32,
+) -> Result<(), String> {
+    if files.is_empty() {
+        return Err("empty playlist".into());
+    }
+    let relay_tx = state.get_or_create_media_relay(source_id).await;
+
+    // Write a concat list file. Single quotes in paths are escaped per the
+    // concat demuxer's rules ( ' -> '\'' ).
+    let data_dir = state.config.read().await.data_dir.clone();
+    let _ = tokio::fs::create_dir_all(&data_dir).await;
+    let list_path = data_dir.join(format!("playlist_{}.txt", source_id));
+    let mut list = String::from("ffconcat version 1.0\n");
+    for f in files {
+        // The concat demuxer resolves relative `file` entries against the list file's
+        // own directory, not the process cwd — so a relative data_dir (the default is
+        // "data") would double the prefix (data/data/library/...) and ffmpeg would fail
+        // to open the input. Canonicalize to an absolute path to sidestep that.
+        let abs = tokio::fs::canonicalize(f).await.unwrap_or_else(|_| f.clone());
+        let p = abs.to_string_lossy().replace('\'', "'\\''");
+        list.push_str(&format!("file '{}'\n", p));
+    }
+    tokio::fs::write(&list_path, list).await.map_err(|e| format!("write playlist: {}", e))?;
+
+    let vf = format!(
+        "scale={}:{}:force_original_aspect_ratio=decrease,pad={}:{}:(ow-iw)/2:(oh-ih)/2:black,setsar=1",
+        width, height, width, height
+    );
+    let mut args: Vec<String> = vec!["-hide_banner".into(), "-loglevel".into(), "warning".into()];
+    if loop_forever {
+        args.extend(["-stream_loop".into(), "-1".into()]);
+    }
+    args.extend([
+        "-re".into(), "-f".into(), "concat".into(), "-safe".into(), "0".into(),
+        "-i".into(), list_path.to_string_lossy().into_owned(),
+        "-vf".into(), vf,
+        "-c:v".into(), "libx264".into(), "-preset".into(), "veryfast".into(),
+        "-tune".into(), "zerolatency".into(), "-pix_fmt".into(), "yuv420p".into(),
+        "-g".into(), format!("{}", fps * 2), "-r".into(), format!("{}", fps), "-b:v".into(), "3000k".into(),
+        "-c:a".into(), "aac".into(), "-b:a".into(), "128k".into(), "-ar".into(), "48000".into(),
+        "-ac".into(), "2".into(),
+        "-f".into(), "flv".into(), "pipe:1".into(),
+    ]);
+
+    tracing::info!("starting concat playback for {} ({} items, loop={})", source_id, files.len(), loop_forever);
+    let mut child = Command::new("ffmpeg")
+        .args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .kill_on_drop(true).spawn().map_err(|e| format!("failed to start ffmpeg: {}", e))?;
+    let stdout = child.stdout.take().ok_or("no stdout")?;
+    if let Some(stderr) = child.stderr.take() {
+        let sid = source_id;
+        tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(stderr);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match tokio::io::AsyncBufReadExt::read_line(&mut reader, &mut line).await {
+                    Ok(0) => break,
+                    Ok(_) => tracing::debug!("ffmpeg concat [{}]: {}", sid, line.trim()),
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+    {
+        let mut players = state.media_players.write().await;
+        if let Some(mut old) = players.remove(&source_id) { let _ = old.kill().await; }
+        players.insert(source_id, child);
+    }
+    let sc = state.clone();
+    tokio::spawn(async move { feed_relay(source_id, stdout, relay_tx, sc).await; });
     Ok(())
 }
 
