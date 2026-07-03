@@ -10,12 +10,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
-struct VodItem {
-    asset_id: Uuid,
-    file_path: PathBuf,
-    duration_ms: u64,
-}
-
 /// Air the schedule now. Spawns a task that runs the broadcast and returns.
 pub async fn start_broadcast(state: Arc<AppState>, schedule_id: Uuid) {
     tokio::spawn(async move {
@@ -28,7 +22,7 @@ pub async fn start_broadcast(state: Arc<AppState>, schedule_id: Uuid) {
 }
 
 async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), String> {
-    let vod = load_first_vod(state, schedule_id).await?;
+    let playlist = load_playlist(state, schedule_id).await?;
     let end_behavior = load_end_behavior(state, schedule_id).await;
     let standby_asset = load_standby_asset(state, schedule_id).await;
     let destinations = load_destinations(state, schedule_id).await;
@@ -36,10 +30,11 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
     let _ = state.active_schedule.send(Some(schedule_id));
     record_run(state, schedule_id, "ran").await;
     let _ = state.ws_tx.send(WsEvent::ScheduleStarted { id: schedule_id });
-    tracing::info!("playout: schedule {} on air (vod {})", schedule_id, vod.asset_id);
+    tracing::info!("playout: schedule {} on air ({} VOD items)", schedule_id, playlist.files.len());
 
     let standby_id = ensure_standby(state, &standby_asset).await;
     let cfg = load_output_config(state).await;
+    let (out_w, out_h, out_fps) = (cfg.width, cfg.height, cfg.fps);
     let seq = if let Some(sid) = standby_id {
         state.sequence_headers.read().await.get(&sid).cloned()
     } else {
@@ -58,20 +53,18 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
     state.pipeline.start(Vec::new()).await.ok();
 
     let vod_source = Uuid::new_v4();
-    let loop_mode = if matches!(end_behavior, EndBehavior::Loop) {
-        "loop"
-    } else {
-        "one_shot"
-    };
-    crate::media_player::start_media_playback(state.clone(), vod_source, &vod.file_path, loop_mode)
-        .await
-        .map_err(|e| format!("vod playback: {}", e))?;
+    let loop_forever = matches!(end_behavior, EndBehavior::Loop);
+    crate::media_player::start_concat_playback(
+        state.clone(), vod_source, &playlist.files, loop_forever, out_w, out_h, out_fps,
+    )
+    .await
+    .map_err(|e| format!("playlist playback: {}", e))?;
     tokio::time::sleep(Duration::from_millis(500)).await;
     let _ = state.program_intent.send(Some(vod_source));
     crate::egress_restart_for(state, vod_source).await;
 
     if !matches!(end_behavior, EndBehavior::Loop) {
-        let dur = Duration::from_millis(vod.duration_ms.max(1000));
+        let dur = Duration::from_millis(playlist.total_ms.max(1000));
         tokio::select! {
             _ = tokio::time::sleep(dur) => {}
             _ = wait_until_deactivated(state, schedule_id) => {
@@ -128,38 +121,50 @@ async fn wait_until_deactivated(state: &Arc<AppState>, schedule_id: Uuid) {
     }
 }
 
-async fn ensure_standby(state: &Arc<AppState>, standby: &Option<VodItem>) -> Option<Uuid> {
-    let s = standby.as_ref()?;
+async fn ensure_standby(state: &Arc<AppState>, standby: &Option<PathBuf>) -> Option<Uuid> {
+    let p = standby.as_ref()?;
     let id = Uuid::new_v4();
-    let _ = crate::media_player::start_media_playback(state.clone(), id, &s.file_path, "loop").await;
+    let _ = crate::media_player::start_media_playback(state.clone(), id, p, "loop").await;
     tokio::time::sleep(Duration::from_millis(400)).await;
     Some(id)
 }
 
-async fn load_first_vod(state: &AppState, schedule_id: Uuid) -> Result<VodItem, String> {
-    let row = sqlx::query_as::<_, (String,)>(
-        "SELECT ref_id FROM schedule_items WHERE schedule_id = ? AND item_kind = 'vod' ORDER BY position ASC LIMIT 1",
-    )
-    .bind(schedule_id.to_string())
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|e| e.to_string())?
-    .ok_or("schedule has no VOD item")?;
-    let asset_id: Uuid = row.0.parse().map_err(|_| "bad asset id")?;
-    let a = sqlx::query_as::<_, (String, i64)>("SELECT file_path, duration_ms FROM assets WHERE id = ?")
-        .bind(asset_id.to_string())
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or("VOD asset not found")?;
-    Ok(VodItem {
-        asset_id,
-        file_path: PathBuf::from(a.0),
-        duration_ms: a.1.max(0) as u64,
-    })
+struct Playlist {
+    files: Vec<std::path::PathBuf>,
+    total_ms: u64,
 }
 
-async fn load_standby_asset(state: &AppState, schedule_id: Uuid) -> Option<VodItem> {
+async fn load_playlist(state: &AppState, schedule_id: Uuid) -> Result<Playlist, String> {
+    let rows = sqlx::query_as::<_, (String,)>(
+        "SELECT ref_id FROM schedule_items WHERE schedule_id = ? AND item_kind = 'vod' ORDER BY position ASC",
+    )
+    .bind(schedule_id.to_string())
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    if rows.is_empty() {
+        return Err("schedule has no VOD items".into());
+    }
+    let mut files = Vec::new();
+    let mut total_ms = 0u64;
+    for (ref_id,) in rows {
+        let a = sqlx::query_as::<_, (String, i64)>("SELECT file_path, duration_ms FROM assets WHERE id = ?")
+            .bind(&ref_id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+        if let Some((path, dur)) = a {
+            files.push(std::path::PathBuf::from(path));
+            total_ms += dur.max(0) as u64;
+        }
+    }
+    if files.is_empty() {
+        return Err("no playable VOD assets".into());
+    }
+    Ok(Playlist { files, total_ms })
+}
+
+async fn load_standby_asset(state: &AppState, schedule_id: Uuid) -> Option<std::path::PathBuf> {
     let sid: Option<(Option<String>,)> =
         sqlx::query_as("SELECT standby_asset_id FROM schedules WHERE id = ?")
             .bind(schedule_id.to_string())
@@ -168,17 +173,13 @@ async fn load_standby_asset(state: &AppState, schedule_id: Uuid) -> Option<VodIt
             .ok()
             .flatten();
     let asset_id = sid.and_then(|r| r.0)?;
-    let a = sqlx::query_as::<_, (String, i64)>("SELECT file_path, duration_ms FROM assets WHERE id = ?")
+    let a = sqlx::query_as::<_, (String,)>("SELECT file_path FROM assets WHERE id = ?")
         .bind(&asset_id)
         .fetch_optional(&state.db)
         .await
         .ok()
         .flatten()?;
-    Some(VodItem {
-        asset_id: asset_id.parse().ok()?,
-        file_path: PathBuf::from(a.0),
-        duration_ms: a.1.max(0) as u64,
-    })
+    Some(std::path::PathBuf::from(a.0))
 }
 
 async fn load_end_behavior(state: &AppState, schedule_id: Uuid) -> EndBehavior {
