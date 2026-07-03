@@ -169,7 +169,12 @@ pub async fn start_concat_playback(
     let list_path = data_dir.join(format!("playlist_{}.txt", source_id));
     let mut list = String::from("ffconcat version 1.0\n");
     for f in files {
-        let p = f.to_string_lossy().replace('\'', "'\\''");
+        // The concat demuxer resolves relative `file` entries against the list file's
+        // own directory, not the process cwd — so a relative data_dir (the default is
+        // "data") would double the prefix (data/data/library/...) and ffmpeg would fail
+        // to open the input. Canonicalize to an absolute path to sidestep that.
+        let abs = tokio::fs::canonicalize(f).await.unwrap_or_else(|_| f.clone());
+        let p = abs.to_string_lossy().replace('\'', "'\\''");
         list.push_str(&format!("file '{}'\n", p));
     }
     tokio::fs::write(&list_path, list).await.map_err(|e| format!("write playlist: {}", e))?;
