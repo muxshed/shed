@@ -4,6 +4,7 @@
 	import { api } from '$lib/api';
 	import { notify } from '$lib/notify';
 	import type { User, Source, FailoverConfig } from '$lib/types';
+	import TimezonePicker from '../../../components/TimezonePicker.svelte';
 
 	// Password change
 	let currentPassword = $state('');
@@ -338,8 +339,8 @@
 	<section class="panel">
 		<header class="panel__head">▮ System Timezone</header>
 		<div class="panel__body">
-			<p class="mb-2 text-xs text-amber-dim">All schedules are evaluated in this timezone (IANA name, e.g. Europe/London).</p>
-			<input bind:value={systemTz} placeholder="Europe/London" class="input mb-2" />
+			<p class="mb-2 text-xs text-amber-dim">All schedules are evaluated in this timezone. Search by city or region.</p>
+			<div class="mb-2"><TimezonePicker bind:value={systemTz} /></div>
 			<button onclick={saveTz} disabled={tzSaving} class="btn btn--go">{tzSaving ? 'Saving…' : 'Save timezone'}</button>
 		</div>
 	</section>
