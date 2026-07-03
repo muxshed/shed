@@ -16,7 +16,8 @@
 	let triggerKind = $state<'once' | 'cron'>('cron');
 	let cron = $state('0 20 * * *');
 	let onceAt = $state('');
-	let vodId = $state('');
+	let items = $state<string[]>([]);
+	let addVod = $state('');
 	let standbyId = $state('');
 	let endBehavior = $state<'stop' | 'loop' | 'standby'>('stop');
 	let destIds = $state<string[]>([]);
@@ -41,7 +42,8 @@
 		triggerKind = 'cron';
 		cron = '0 20 * * *';
 		onceAt = '';
-		vodId = assets[0]?.id ?? '';
+		items = [];
+		addVod = assets[0]?.id ?? '';
 		standbyId = '';
 		endBehavior = 'stop';
 		destIds = [];
@@ -57,13 +59,28 @@
 			standby_asset_id: standbyId || null,
 			end_behavior: endBehavior,
 			until_at: null,
-			items: [{ kind: 'vod', ref_id: vodId }],
+			items: items.map((ref_id) => ({ kind: 'vod', ref_id })),
 		};
 	}
 
+	function addItem() {
+		if (addVod) items = [...items, addVod];
+	}
+	function removeItem(i: number) {
+		items = items.filter((_, j) => j !== i);
+	}
+	function move(i: number, d: -1 | 1) {
+		const j = i + d;
+		if (j < 0 || j >= items.length) return;
+		const c = [...items];
+		[c[i], c[j]] = [c[j], c[i]];
+		items = c;
+	}
+	const assetName = (id: string) => assets.find((a) => a.id === id)?.name ?? id;
+
 	async function save() {
-		if (!vodId) {
-			notify.error('Pick a VOD');
+		if (items.length === 0) {
+			notify.error('Add at least one VOD');
 			return;
 		}
 		try {
@@ -152,10 +169,26 @@
 				<label class="field-label" for="s-name">Name</label>
 				<input id="s-name" bind:value={name} class="input mb-3" />
 
-				<label class="field-label" for="s-vod">VOD</label>
-				<select id="s-vod" bind:value={vodId} class="select mb-3 w-full">
-					{#each assets as a}<option value={a.id}>{a.name}</option>{/each}
-				</select>
+				<span class="field-label">Playlist</span>
+				<div class="mb-2 flex flex-col gap-1">
+					{#each items as id, i (id + i)}
+						<div class="row items-center justify-between text-xs">
+							<span class="text-amber">{i + 1}. {assetName(id)}</span>
+							<div class="flex gap-1">
+								<button type="button" class="btn btn--ghost" onclick={() => move(i, -1)} aria-label="Move up">▲</button>
+								<button type="button" class="btn btn--ghost" onclick={() => move(i, 1)} aria-label="Move down">▼</button>
+								<button type="button" class="btn btn--danger" onclick={() => removeItem(i)} aria-label="Remove">✕</button>
+							</div>
+						</div>
+					{/each}
+					{#if items.length === 0}<p class="text-[11px] text-amber-muted">No VODs yet.</p>{/if}
+				</div>
+				<div class="mb-3 flex gap-2">
+					<select bind:value={addVod} class="select flex-1">
+						{#each assets as a}<option value={a.id}>{a.name}</option>{/each}
+					</select>
+					<button type="button" class="btn" onclick={addItem}>+ Add</button>
+				</div>
 
 				<label class="field-label" for="s-trigger">Trigger</label>
 				<select id="s-trigger" bind:value={triggerKind} class="select mb-2 w-full">
