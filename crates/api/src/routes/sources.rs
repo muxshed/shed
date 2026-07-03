@@ -13,18 +13,25 @@ use crate::state::AppState;
 use muxshed_common::{MuxshedError, Source, SourceKind, SourceState};
 use std::path::PathBuf;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateSource {
     pub name: String,
     pub kind: SourceKind,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateSource {
     pub name: Option<String>,
     pub kind: Option<SourceKind>,
 }
 
+/// List all sources.
+#[utoipa::path(
+    get,
+    path = "/api/v1/sources",
+    tag = "sources",
+    responses((status = 200, description = "Sources", body = [muxshed_common::Source]))
+)]
 pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Source>>, ApiError> {
     let rows = sqlx::query_as::<_, SourceRow>(
         "SELECT id, name, kind FROM sources WHERE kind NOT LIKE '%\"media_file\"%'"
@@ -46,6 +53,14 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Source>
     Ok(Json(sources))
 }
 
+/// Create a source.
+#[utoipa::path(
+    post,
+    path = "/api/v1/sources",
+    tag = "sources",
+    request_body = CreateSource,
+    responses((status = 201, description = "Created source", body = muxshed_common::Source))
+)]
 pub async fn create(
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreateSource>,
@@ -99,6 +114,17 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(source)))
 }
 
+/// Get a single source by id.
+#[utoipa::path(
+    get,
+    path = "/api/v1/sources/{id}",
+    tag = "sources",
+    params(("id" = String, Path, description = "Source id")),
+    responses(
+        (status = 200, description = "Source", body = muxshed_common::Source),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_one(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -117,6 +143,18 @@ pub async fn get_one(
     Ok(Json(source))
 }
 
+/// Update a source.
+#[utoipa::path(
+    put,
+    path = "/api/v1/sources/{id}",
+    tag = "sources",
+    params(("id" = String, Path, description = "Source id")),
+    request_body = UpdateSource,
+    responses(
+        (status = 200, description = "Updated source", body = muxshed_common::Source),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -152,6 +190,17 @@ pub async fn update(
     Ok(Json(source))
 }
 
+/// Delete a source.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/sources/{id}",
+    tag = "sources",
+    params(("id" = String, Path, description = "Source id")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -176,12 +225,20 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateFromAsset {
     pub asset_id: String,
     pub name: Option<String>,
 }
 
+/// Create a source from an existing media asset.
+#[utoipa::path(
+    post,
+    path = "/api/v1/sources/from-asset",
+    tag = "sources",
+    request_body = CreateFromAsset,
+    responses((status = 201, description = "Created source", body = muxshed_common::Source))
+)]
 pub async fn create_from_asset(
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreateFromAsset>,

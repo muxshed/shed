@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Source {
     pub id: Uuid,
     pub name: String,
@@ -13,7 +13,7 @@ pub struct Source {
     pub state: SourceState,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SourceKind {
     Rtmp { stream_key: String },
@@ -22,13 +22,14 @@ pub enum SourceKind {
     TestPattern,
     MediaFile {
         asset_id: Uuid,
+        #[schema(value_type = String)]
         file_path: PathBuf,
         loop_mode: String,
     },
     Browser { url: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceState {
     Disconnected,
@@ -37,14 +38,14 @@ pub enum SourceState {
     Error(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Scene {
     pub id: Uuid,
     pub name: String,
     pub layers: Vec<Layer>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Layer {
     pub id: Uuid,
     pub source_id: Uuid,
@@ -57,7 +58,7 @@ pub struct Layer {
 }
 
 /// How a source fills its layer box.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum LayerFit {
     /// Stretch to the box, ignoring aspect ratio.
@@ -88,22 +89,23 @@ impl LayerFit {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Size {
     pub width: u32,
     pub height: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct StingerConfig {
     pub id: Uuid,
     pub name: String,
+    #[schema(value_type = String)]
     pub file_path: PathBuf,
     pub duration_ms: u64,
     pub start_ms: u64,
@@ -111,10 +113,11 @@ pub struct StingerConfig {
     pub clear_ms: u64,
     pub end_ms: u64,
     pub audio_behaviour: StingerAudio,
+    #[schema(value_type = String)]
     pub thumbnail_path: PathBuf,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum StingerAudio {
     Silent,
@@ -123,7 +126,7 @@ pub enum StingerAudio {
     Replace,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Destination {
     pub id: Uuid,
     pub name: String,
@@ -131,16 +134,19 @@ pub struct Destination {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DestinationKind {
     Rtmp { url: String, stream_key: String },
     Rtmps { url: String, stream_key: String },
     Srt { url: String },
-    Recording { path: PathBuf },
+    Recording {
+        #[schema(value_type = String)]
+        path: PathBuf,
+    },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum PipelineState {
     Idle,
@@ -157,7 +163,7 @@ pub enum PipelineState {
     Error { message: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ApiKey {
     pub id: Uuid,
     pub name: String,
@@ -167,7 +173,7 @@ pub struct ApiKey {
     pub last_used_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ApiScope {
     Read,
@@ -176,9 +182,10 @@ pub enum ApiScope {
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct RecordingState {
     pub recording: bool,
+    #[schema(value_type = Option<String>)]
     pub path: Option<PathBuf>,
     pub started_at: Option<DateTime<Utc>>,
 }
@@ -186,7 +193,7 @@ pub struct RecordingState {
 /// Program failover: when the live program output stops producing video, the
 /// program is automatically switched to a fallback source (a BRB image/video or
 /// a backup ingress) so destinations don't drop, then switched back on recovery.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct FailoverConfig {
     pub enabled: bool,
     /// Source shown while the program is offline. Any source: an image/video
@@ -210,7 +217,7 @@ impl Default for FailoverConfig {
 }
 
 /// How a broadcast ends when its content finishes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum EndBehavior {
     #[default]
@@ -228,7 +235,7 @@ impl EndBehavior {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ScheduleItemKind {
     Vod,
@@ -245,7 +252,7 @@ impl ScheduleItemKind {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TriggerKind {
     /// One-off local datetime in the system timezone, e.g. "2026-07-02T20:00:00".
@@ -254,7 +261,7 @@ pub enum TriggerKind {
     Cron { expr: String },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ScheduleItem {
     pub id: Uuid,
     pub position: u32,
@@ -262,7 +269,7 @@ pub struct ScheduleItem {
     pub ref_id: Uuid,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Schedule {
     pub id: Uuid,
     pub name: String,
@@ -277,7 +284,7 @@ pub struct Schedule {
     pub next_run_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ScheduleRun {
     pub id: Uuid,
     pub schedule_id: Uuid,
@@ -286,7 +293,7 @@ pub struct ScheduleRun {
     pub status: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ChannelConfig {
     pub enabled: bool,
     pub token: String,
@@ -297,7 +304,7 @@ pub struct ChannelConfig {
     pub watch_path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ChannelInfo {
     pub title: String,
     pub logo_url: Option<String>,

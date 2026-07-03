@@ -11,6 +11,13 @@ use crate::routes::broadcast::BroadcastConfig;
 use crate::state::AppState;
 use muxshed_common::{Destination, DestinationKind, MuxshedError, PipelineState};
 
+/// Start the broadcast pipeline (go live).
+#[utoipa::path(
+    post,
+    path = "/api/v1/stream/start",
+    tag = "stream",
+    responses((status = 200, description = "Stream started"))
+)]
 pub async fn start(
     State(state): State<Arc<AppState>>,
     body: Option<Json<serde_json::Value>>,
@@ -149,6 +156,13 @@ pub async fn start(
     Ok(StatusCode::OK)
 }
 
+/// Stop the broadcast pipeline (end the stream).
+#[utoipa::path(
+    post,
+    path = "/api/v1/stream/stop",
+    tag = "stream",
+    responses((status = 200, description = "Stream stopped"))
+)]
 pub async fn stop(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiError> {
     let current = state.pipeline.state().await;
     if matches!(current, PipelineState::Idle) {

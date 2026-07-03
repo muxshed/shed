@@ -75,6 +75,28 @@ fn validate_system_token(system_token_hash: &str, provided_key: &str) -> bool {
     hash == system_token_hash
 }
 
+/// Gate for the privileged `/admin` group. Requires `X-Management-Token` to match
+/// the configured management token (the portal-issued system token), and is
+/// entirely separate from tenant API-key auth, so tenant keys cannot reach it.
+pub async fn management_auth(
+    State(state): State<Arc<AppState>>,
+    req: Request<axum::body::Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let ok = req
+        .headers()
+        .get("X-Management-Token")
+        .and_then(|v| v.to_str().ok())
+        .zip(state.system_token.as_ref())
+        .map(|(provided, expected)| validate_system_token(expected, provided))
+        .unwrap_or(false);
+    if ok {
+        Ok(next.run(req).await)
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
 fn extract_bearer_token(req: &Request<axum::body::Body>) -> Option<String> {
     req.headers()
         .get("Authorization")

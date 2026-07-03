@@ -5,24 +5,32 @@ use axum::http::StatusCode;
 use axum::Json;
 use serde::Deserialize;
 use std::sync::Arc;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::state::AppState;
 use muxshed_common::{Destination, DestinationKind, MuxshedError, WsEvent};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateDestination {
     pub name: String,
     pub kind: DestinationKind,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateDestination {
     pub name: Option<String>,
     pub kind: Option<DestinationKind>,
 }
 
+/// List all destinations.
+#[utoipa::path(
+    get,
+    path = "/api/v1/destinations",
+    tag = "destinations",
+    responses((status = 200, description = "List of destinations", body = [muxshed_common::Destination]))
+)]
 pub async fn list(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Destination>>, ApiError> {
@@ -34,6 +42,14 @@ pub async fn list(
     Ok(Json(dests))
 }
 
+/// Create a destination.
+#[utoipa::path(
+    post,
+    path = "/api/v1/destinations",
+    tag = "destinations",
+    request_body = CreateDestination,
+    responses((status = 201, description = "Destination created", body = muxshed_common::Destination))
+)]
 pub async fn create(
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreateDestination>,
@@ -59,6 +75,15 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(dest)))
 }
 
+/// Update a destination.
+#[utoipa::path(
+    put,
+    path = "/api/v1/destinations/{id}",
+    tag = "destinations",
+    params(("id" = String, Path, description = "Destination id")),
+    request_body = UpdateDestination,
+    responses((status = 200, description = "Destination updated", body = muxshed_common::Destination))
+)]
 pub async fn update(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -99,6 +124,14 @@ pub async fn update(
     Ok(Json(dest))
 }
 
+/// Delete a destination.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/destinations/{id}",
+    tag = "destinations",
+    params(("id" = String, Path, description = "Destination id")),
+    responses((status = 204, description = "Destination deleted"))
+)]
 pub async fn delete(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -115,6 +148,14 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Enable a destination.
+#[utoipa::path(
+    post,
+    path = "/api/v1/destinations/{id}/enable",
+    tag = "destinations",
+    params(("id" = String, Path, description = "Destination id")),
+    responses((status = 200, description = "Destination enabled"))
+)]
 pub async fn enable(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -122,6 +163,14 @@ pub async fn enable(
     set_enabled(&state, &id, true).await
 }
 
+/// Disable a destination.
+#[utoipa::path(
+    post,
+    path = "/api/v1/destinations/{id}/disable",
+    tag = "destinations",
+    params(("id" = String, Path, description = "Destination id")),
+    responses((status = 200, description = "Destination disabled"))
+)]
 pub async fn disable(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,

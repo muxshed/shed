@@ -9,11 +9,18 @@ use crate::error::ApiError;
 use crate::state::AppState;
 use muxshed_common::PipelineState;
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct StatusResponse {
     pub pipeline: PipelineState,
 }
 
+/// Current pipeline status.
+#[utoipa::path(
+    get,
+    path = "/api/v1/status",
+    tag = "status",
+    responses((status = 200, description = "Pipeline status", body = StatusResponse))
+)]
 pub async fn get_status(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<StatusResponse>, ApiError> {

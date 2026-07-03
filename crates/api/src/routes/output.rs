@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::error::ApiError;
 use crate::state::AppState;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct OutputConfig {
     pub video_bitrate_kbps: u32,
     pub audio_bitrate_kbps: u32,
@@ -29,7 +29,7 @@ impl Default for OutputConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, utoipa::ToSchema)]
 pub struct OutputStats {
     pub bytes_sent: u64,
     pub duration_secs: f64,
@@ -42,6 +42,13 @@ pub struct OutputStats {
     pub source_encoder: Option<String>,
 }
 
+/// Get the encoder output config.
+#[utoipa::path(
+    get,
+    path = "/api/v1/output/config",
+    tag = "stream",
+    responses((status = 200, description = "Output config", body = OutputConfig))
+)]
 pub async fn get_config(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<OutputConfig>, ApiError> {
@@ -58,6 +65,14 @@ pub async fn get_config(
     Ok(Json(config))
 }
 
+/// Set the encoder output config.
+#[utoipa::path(
+    put,
+    path = "/api/v1/output/config",
+    tag = "stream",
+    request_body = OutputConfig,
+    responses((status = 200, description = "Updated output config", body = OutputConfig))
+)]
 pub async fn set_config(
     State(state): State<Arc<AppState>>,
     Json(config): Json<OutputConfig>,
@@ -73,6 +88,13 @@ pub async fn set_config(
     Ok(Json(config))
 }
 
+/// Get live output/egress stats.
+#[utoipa::path(
+    get,
+    path = "/api/v1/output/stats",
+    tag = "stream",
+    responses((status = 200, description = "Output stats", body = OutputStats))
+)]
 pub async fn get_stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<OutputStats>, ApiError> {

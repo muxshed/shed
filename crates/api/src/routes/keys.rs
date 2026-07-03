@@ -12,13 +12,13 @@ use crate::error::ApiError;
 use crate::state::AppState;
 use muxshed_common::MuxshedError;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateKey {
     pub name: String,
     pub scopes: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct KeyResponse {
     pub id: String,
     pub name: String,
@@ -27,7 +27,7 @@ pub struct KeyResponse {
     pub last_used_at: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct CreateKeyResponse {
     pub id: String,
     pub name: String,
@@ -35,6 +35,13 @@ pub struct CreateKeyResponse {
     pub scopes: Vec<String>,
 }
 
+/// List API keys.
+#[utoipa::path(
+    get,
+    path = "/api/v1/keys",
+    tag = "keys",
+    responses((status = 200, description = "List of API keys", body = [KeyResponse]))
+)]
 pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<KeyResponse>>, ApiError> {
     let rows = sqlx::query_as::<_, KeyRow>(
         "SELECT id, name, scopes, created_at, last_used_at FROM api_keys",
@@ -56,6 +63,14 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<KeyResp
     Ok(Json(keys))
 }
 
+/// Create an API key.
+#[utoipa::path(
+    post,
+    path = "/api/v1/keys",
+    tag = "keys",
+    request_body = CreateKey,
+    responses((status = 201, description = "Created key (plaintext returned once)", body = CreateKeyResponse))
+)]
 pub async fn create(
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreateKey>,
@@ -85,6 +100,14 @@ pub async fn create(
     ))
 }
 
+/// Delete an API key.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/keys/{id}",
+    tag = "keys",
+    params(("id" = String, Path, description = "API key id")),
+    responses((status = 204, description = "Deleted"))
+)]
 pub async fn delete(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,

@@ -206,8 +206,24 @@ All configuration is via environment variables. See `.env.example` for the full 
 | `MUXSHED_DB_PATH` | `muxshed.db` | SQLite database file path |
 | `MUXSHED_DATA_DIR` | `data` | Directory for recordings, stingers, etc. |
 | `MUXSHED_WEB_DIR` | *(none)* | Path to built frontend assets (set automatically in Docker) |
+| `MUXSHED_HEADLESS` | `false` | Run API-only, no web UI (see below) |
+| `MUXSHED_API_KEY` | *(none)* | Preseed an admin API key at startup (used in headless mode) |
 | `MUXSHED_LOG_LEVEL` | `info` | Log level: trace, debug, info, warn, error |
 | `RUST_LOG` | `info` | Rust log filter (overrides `MUXSHED_LOG_LEVEL` for fine-grained control) |
+
+## Headless Mode
+
+Run Muxshed API-only, with no web UI, for CLI or API workflows. Set
+`MUXSHED_HEADLESS=true` and preseed a key with `MUXSHED_API_KEY`. The full API is
+available; the root returns a JSON notice instead of the app. A slim image without
+the web build stage is at `docker/Dockerfile.headless`.
+
+```sh
+MUXSHED_HEADLESS=true MUXSHED_API_KEY=mxs_your_key ./target/release/muxshed-api
+```
+
+Interactive API docs are served on every instance at `/api/v1/docs` (Scalar), with the
+OpenAPI document at `/api/v1/openapi.json`.
 
 ## Running Tests
 

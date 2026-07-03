@@ -1,22 +1,23 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
+pub mod admin;
 mod assets;
 mod audio;
 mod auth;
-mod failover;
+pub mod failover;
 mod broadcast;
-mod channel;
+pub mod channel;
 mod preview;
-mod destinations;
+pub mod destinations;
 mod guests;
-mod keys;
+pub mod keys;
 pub mod output;
-mod recording;
-mod scenes;
-mod schedules;
+pub mod recording;
+pub mod scenes;
+pub mod schedules;
 mod setup;
-mod sources;
-mod status;
+pub mod sources;
+pub mod status;
 mod stingers;
 pub mod stream;
 mod switching;
@@ -26,15 +27,42 @@ mod ws;
 use crate::auth::auth_middleware;
 use crate::state::AppState;
 use axum::middleware;
+use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
-use axum::Router;
+use axum::{Json, Router};
 use std::sync::Arc;
 use axum::extract::DefaultBodyLimit;
+use axum::http::StatusCode;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 
-pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -> Router {
-    let api = Router::new()
+/// Root notice for headless instances (no web UI). Points at the API and docs.
+async fn headless_root() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "service": "muxshed",
+        "version": env!("CARGO_PKG_VERSION"),
+        "headless": true,
+        "api": "/api/v1",
+        "docs": "/api/v1/docs"
+    }))
+}
+
+/// 404 for unmatched non-API routes in headless, with a pointer to the API.
+async fn headless_not_found() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({
+            "error": { "code": "NOT_FOUND", "message": "no web UI in headless mode; use /api/v1" }
+        })),
+    )
+}
+
+pub fn build_router(
+    state: Arc<AppState>,
+    web_dir: Option<std::path::PathBuf>,
+    headless: bool,
+) -> Router {
+    let mut api = Router::new()
         // Sources
         .route("/sources", get(sources::list).post(sources::create))
         .route("/sources/from-asset", post(sources::create_from_asset))
@@ -173,9 +201,49 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
         .route("/guest/{token}", get(guests::public_info))
         .route("/guest/{token}/whip", post(guests::whip));
 
+    // Privileged management group, only mounted when a management token is set.
+    // Gated by management_auth (X-Management-Token), separate from tenant keys.
+    if state.system_token.is_some() {
+        let admin_router = Router::new()
+            .route("/health", get(admin::health))
+            .route("/stats", get(admin::stats))
+            .route("/connectivity", get(admin::connectivity))
+            .route("/restart", post(admin::restart))
+            .route("/config", get(admin::get_config).put(admin::put_config))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                crate::auth::management_auth,
+            ));
+        api = api.nest("/admin", admin_router);
+        tracing::info!("management endpoints enabled at /api/v1/admin");
+    }
+
     let mut router = Router::new().nest("/api/v1", api);
 
-    if let Some(ref dir) = web_dir {
+    // Public OpenAPI document and interactive Scalar docs, on every instance.
+    {
+        use utoipa::OpenApi;
+        use utoipa_scalar::{Scalar, Servable};
+        let spec = crate::openapi::ApiDoc::openapi();
+        router = router
+            .route(
+                "/api/v1/openapi.json",
+                get({
+                    let spec = spec.clone();
+                    move || {
+                        let spec = spec.clone();
+                        async move { Json(spec) }
+                    }
+                }),
+            )
+            .merge(Scalar::with_url("/api/v1/docs", spec));
+    }
+
+    if headless {
+        // No web UI: a JSON notice at the root, JSON 404 for everything else.
+        router = router.route("/", get(headless_root)).fallback(headless_not_found);
+        tracing::info!("headless mode — web UI not served");
+    } else if let Some(ref dir) = web_dir {
         if dir.exists() {
             let index = dir.join("index.html");
             router = router.fallback_service(
