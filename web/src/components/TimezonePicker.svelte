@@ -17,6 +17,32 @@
 	let query = $state('');
 	let open = $state(false);
 	let active = $state(0);
+	let inputEl = $state<HTMLInputElement | null>(null);
+	// The dropdown is a fixed-position popover anchored to the input's screen
+	// rect, so it isn't clipped by the settings panel's overflow.
+	let rect = $state({ top: 0, left: 0, width: 0 });
+
+	function place() {
+		if (!inputEl) return;
+		const r = inputEl.getBoundingClientRect();
+		rect = { top: r.bottom, left: r.left, width: r.width };
+	}
+	function openList() {
+		open = true;
+		active = 0;
+		place();
+	}
+
+	$effect(() => {
+		if (!open) return;
+		const reposition = () => place();
+		window.addEventListener('scroll', reposition, true);
+		window.addEventListener('resize', reposition);
+		return () => {
+			window.removeEventListener('scroll', reposition, true);
+			window.removeEventListener('resize', reposition);
+		};
+	});
 
 	function offset(tz: string): string {
 		try {
@@ -55,11 +81,12 @@
 
 <div class="relative">
 	<input
+		bind:this={inputEl}
 		class="input"
 		placeholder={value ? label(value) : 'Search timezone…'}
 		bind:value={query}
-		onfocus={() => { open = true; active = 0; }}
-		oninput={() => { open = true; active = 0; }}
+		onfocus={openList}
+		oninput={openList}
 		onkeydown={onKeydown}
 		onblur={() => setTimeout(() => (open = false), 150)}
 		role="combobox"
@@ -75,7 +102,8 @@
 		<ul
 			id="tz-listbox"
 			role="listbox"
-			class="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded border border-border bg-panel-raised shadow-lg"
+			class="fixed z-50 max-h-64 overflow-y-auto rounded border border-border bg-panel-raised shadow-lg"
+			style="top: {rect.top}px; left: {rect.left}px; width: {rect.width}px;"
 		>
 			{#if filtered.length === 0}
 				<li class="px-3 py-2 text-xs text-amber-muted">No match</li>
