@@ -8,6 +8,7 @@
 
 	let schedules = $state<Schedule[]>([]);
 	let assets = $state<Asset[]>([]);
+	let standbyAssets = $state<Asset[]>([]);
 	let destinations = $state<Destination[]>([]);
 	let tz = $state('UTC');
 
@@ -32,6 +33,7 @@
 		]);
 		schedules = s;
 		assets = a.filter((x) => x.asset_type === 'video');
+		standbyAssets = a.filter((x) => x.asset_type === 'image' || x.asset_type === 'video');
 		destinations = d;
 		tz = t.timezone;
 	}
@@ -211,7 +213,7 @@
 				<label class="field-label" for="s-standby">Standby card (optional)</label>
 				<select id="s-standby" bind:value={standbyId} class="select mb-3 w-full">
 					<option value="">— none —</option>
-					{#each assets as a}<option value={a.id}>{a.name}</option>{/each}
+					{#each standbyAssets as a}<option value={a.id}>{a.name}</option>{/each}
 				</select>
 
 				<span class="field-label">Destinations</span>
