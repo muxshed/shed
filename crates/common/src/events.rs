@@ -42,6 +42,9 @@ pub enum WsEvent {
         /// The operator-selected source the failover is standing in for.
         intent_source_id: Option<Uuid>,
     },
+    ScheduleStarted { id: Uuid },
+    ScheduleEnded { id: Uuid },
+    ScheduleSkipped { id: Uuid, reason: String },
     Error {
         message: String,
         code: String,

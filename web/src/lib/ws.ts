@@ -1,7 +1,8 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
-import { pipelineState, sources, destinations, recordingState, failover } from './stores/pipeline';
+import { pipelineState, sources, destinations, recordingState, failover, activeSchedule } from './stores/pipeline';
 import type { WsEvent } from './types';
+import { notify } from '$lib/notify';
 
 let ws: WebSocket | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -93,6 +94,15 @@ function handleEvent(event: WsEvent) {
 				fallback_source_id: event.payload.fallback_source_id,
 				intent_source_id: event.payload.intent_source_id,
 			});
+			break;
+		case 'schedule_started':
+			activeSchedule.set({ id: event.payload.id });
+			break;
+		case 'schedule_ended':
+			activeSchedule.set({ id: null });
+			break;
+		case 'schedule_skipped':
+			notify.info(`Schedule skipped: ${event.payload.reason}`);
 			break;
 	}
 }

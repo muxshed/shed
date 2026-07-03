@@ -44,6 +44,10 @@ pub struct AppState {
     pub program_intent: watch::Sender<Option<Uuid>>,
     /// Whether a failover is currently engaged (program is on the fallback).
     pub failover_active: watch::Sender<bool>,
+    /// The schedule whose broadcast is currently on air (None = manual/idle).
+    pub active_schedule: watch::Sender<Option<Uuid>>,
+    /// Bumped whenever schedules or the system timezone change, to wake the scheduler.
+    pub schedule_nudge: watch::Sender<u64>,
     /// Which source is in preview (next to go live)
     pub preview_source: RwLock<Option<Uuid>>,
     /// Audio routing: which sources are providing audio and at what level
