@@ -71,11 +71,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .execute(&db)
         .await;
 
-    let needs_setup: i32 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys")
+    // Headless bootstrap: seed the env-provided admin API key (idempotent) so an
+    // operator has a working credential without the web setup wizard.
+    if let Some(ref bootstrap) = config.bootstrap_api_key {
+        let hash = hash_key(bootstrap);
+        let scopes = serde_json::json!(["read", "control", "admin"]).to_string();
+        let res = sqlx::query(
+            "INSERT INTO api_keys (id, name, key_hash, scopes) \
+             SELECT ?, 'bootstrap', ?, ? \
+             WHERE NOT EXISTS (SELECT 1 FROM api_keys WHERE key_hash = ?)",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(&hash)
+        .bind(&scopes)
+        .bind(&hash)
+        .execute(&db)
+        .await?;
+        if res.rows_affected() > 0 {
+            tracing::info!("headless: seeded bootstrap API key from MUXSHED_API_KEY");
+        }
+    }
+
+    let key_count: i32 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys")
         .fetch_one(&db)
         .await?;
-    if needs_setup == 0 {
-        tracing::info!("no API keys found — open the web UI to complete setup");
+    if key_count == 0 {
+        if config.headless {
+            tracing::warn!("headless: no API key configured — set MUXSHED_API_KEY to seed one");
+        } else {
+            tracing::info!("no API keys found — open the web UI to complete setup");
+        }
     }
 
     let (ws_tx, _) = broadcast::channel::<WsEvent>(256);
@@ -203,7 +228,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         start_rtmp_server(rtmp_state, rtmp_port).await;
     });
 
-    let app = routes::build_router(state.clone(), config.web_dir.clone());
+    let app = routes::build_router(state.clone(), config.web_dir.clone(), config.headless);
 
     let listener = tokio::net::TcpListener::bind(&config.listen_addr).await?;
     tracing::info!("listening on {}", config.listen_addr);

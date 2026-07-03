@@ -37,6 +37,8 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         data_dir: PathBuf::from("/tmp/muxshed-test"),
         web_dir: None,
         log_level: "error".to_string(),
+        headless: false,
+        bootstrap_api_key: None,
     };
 
     let key = generate_api_key();
@@ -79,7 +81,7 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         system_token: None,
     });
 
-    (build_router(state.clone(), None), key, state)
+    (build_router(state.clone(), None, false), key, state)
 }
 
 fn json_request(method: &str, uri: &str, key: &str, body: Option<&str>) -> Request<Body> {

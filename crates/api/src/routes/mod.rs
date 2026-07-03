@@ -26,14 +26,41 @@ mod ws;
 use crate::auth::auth_middleware;
 use crate::state::AppState;
 use axum::middleware;
+use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
-use axum::Router;
+use axum::{Json, Router};
 use std::sync::Arc;
 use axum::extract::DefaultBodyLimit;
+use axum::http::StatusCode;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 
-pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -> Router {
+/// Root notice for headless instances (no web UI). Points at the API and docs.
+async fn headless_root() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "service": "muxshed",
+        "version": env!("CARGO_PKG_VERSION"),
+        "headless": true,
+        "api": "/api/v1",
+        "docs": "/api/v1/docs"
+    }))
+}
+
+/// 404 for unmatched non-API routes in headless, with a pointer to the API.
+async fn headless_not_found() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({
+            "error": { "code": "NOT_FOUND", "message": "no web UI in headless mode; use /api/v1" }
+        })),
+    )
+}
+
+pub fn build_router(
+    state: Arc<AppState>,
+    web_dir: Option<std::path::PathBuf>,
+    headless: bool,
+) -> Router {
     let api = Router::new()
         // Sources
         .route("/sources", get(sources::list).post(sources::create))
@@ -175,7 +202,11 @@ pub fn build_router(state: Arc<AppState>, web_dir: Option<std::path::PathBuf>) -
 
     let mut router = Router::new().nest("/api/v1", api);
 
-    if let Some(ref dir) = web_dir {
+    if headless {
+        // No web UI: a JSON notice at the root, JSON 404 for everything else.
+        router = router.route("/", get(headless_root)).fallback(headless_not_found);
+        tracing::info!("headless mode — web UI not served");
+    } else if let Some(ref dir) = web_dir {
         if dir.exists() {
             let index = dir.join("index.html");
             router = router.fallback_service(

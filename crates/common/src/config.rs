@@ -11,6 +11,19 @@ pub struct MuxshedConfig {
     pub data_dir: PathBuf,
     pub web_dir: Option<PathBuf>,
     pub log_level: String,
+    /// Run without serving the web UI (API/CLI only). Set MUXSHED_HEADLESS=true.
+    pub headless: bool,
+    /// An admin API key preseeded from the environment (MUXSHED_API_KEY). In
+    /// headless mode this is how the operator gets their first credential without
+    /// the web setup wizard. Seeded (hashed) at startup, idempotently.
+    pub bootstrap_api_key: Option<String>,
+}
+
+fn env_bool(key: &str) -> bool {
+    matches!(
+        std::env::var(key).ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE") | Some("yes")
+    )
 }
 
 impl MuxshedConfig {
@@ -37,6 +50,8 @@ impl MuxshedConfig {
                 .map(PathBuf::from),
             log_level: std::env::var("MUXSHED_LOG_LEVEL")
                 .unwrap_or_else(|_| "info".to_string()),
+            headless: env_bool("MUXSHED_HEADLESS"),
+            bootstrap_api_key: std::env::var("MUXSHED_API_KEY").ok().filter(|s| !s.is_empty()),
         }
     }
 }
