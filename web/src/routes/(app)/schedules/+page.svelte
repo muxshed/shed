@@ -51,6 +51,25 @@
 		destIds = [];
 	}
 
+	function editSchedule(s: Schedule) {
+		editing = s;
+		name = s.name;
+		if (s.trigger.kind === 'cron') {
+			triggerKind = 'cron';
+			cron = s.trigger.expr;
+			onceAt = '';
+		} else {
+			triggerKind = 'once';
+			onceAt = s.trigger.at.slice(0, 16);
+			cron = '0 20 * * *';
+		}
+		items = [...s.items].sort((a, b) => a.position - b.position).map((i) => i.ref_id);
+		addVod = assets[0]?.id ?? '';
+		standbyId = s.standby_asset_id ?? '';
+		endBehavior = s.end_behavior;
+		destIds = [...s.destination_ids];
+	}
+
 	function payload() {
 		const trigger = triggerKind === 'cron' ? { kind: 'cron', expr: cron } : { kind: 'once', at: onceAt };
 		return {
@@ -81,8 +100,11 @@
 	const assetName = (id: string) => assets.find((a) => a.id === id)?.name ?? id;
 
 	async function save() {
+		// Convenience: if a VOD is picked in the selector but not yet added to the
+		// playlist, add it on save so a single-VOD schedule doesn't need the extra click.
+		if (items.length === 0 && addVod) items = [addVod];
 		if (items.length === 0) {
-			notify.error('Add at least one VOD');
+			notify.error('Add at least one VOD to the playlist');
 			return;
 		}
 		try {
@@ -158,6 +180,7 @@
 				</div>
 				<div class="flex gap-1">
 					<button class="btn btn--ghost" onclick={() => runNow(s)}>Air now</button>
+					<button class="btn btn--ghost" onclick={() => editSchedule(s)}>Edit</button>
 					<button class="btn {s.enabled ? 'btn--go' : ''}" onclick={() => toggle(s)}>{s.enabled ? 'On' : 'Off'}</button>
 					<button class="btn btn--danger" onclick={() => del(s)}>✕</button>
 				</div>
@@ -168,6 +191,7 @@
 	{#if editing}
 		<div class="panel mt-4">
 			<div class="panel__body">
+				<h2 class="mb-3 text-amber-bright">{editing.id ? 'Edit schedule' : 'New schedule'}</h2>
 				<label class="field-label" for="s-name">Name</label>
 				<input id="s-name" bind:value={name} class="input mb-3" />
 
