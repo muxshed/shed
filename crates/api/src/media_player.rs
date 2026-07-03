@@ -85,6 +85,9 @@ pub async fn start_media_playback(
             "128k".into(),
             "-ar".into(),
             "48000".into(),
+            // Downmix to stereo: the native AAC encoder rejects 5.1/6-channel input.
+            "-ac".into(),
+            "2".into(),
         ]);
     }
 
@@ -195,6 +198,7 @@ pub async fn start_concat_playback(
         "-tune".into(), "zerolatency".into(), "-pix_fmt".into(), "yuv420p".into(),
         "-g".into(), format!("{}", fps * 2), "-r".into(), format!("{}", fps), "-b:v".into(), "3000k".into(),
         "-c:a".into(), "aac".into(), "-b:a".into(), "128k".into(), "-ar".into(), "48000".into(),
+        "-ac".into(), "2".into(),
         "-f".into(), "flv".into(), "pipe:1".into(),
     ]);
 
