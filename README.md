@@ -1,8 +1,6 @@
 <img src=".github/images/logo.svg" alt="Muxshed" width="300" />
 
-# Muxshed
-
-Self-hosted multistream studio. Ingest from any source -- OBS, hardware encoders, mobile, browser -- over RTMP, SRT, or WebRTC (WHIP coming soon). Switch between inputs live in a browser-based production switcher. Fan-out to every platform at once: YouTube, Twitch, Kick, Facebook, or any custom RTMP/RTMPS endpoint.
+Self-hosted multistream studio. Ingest from any source (OBS, hardware encoders, mobile, browser) over RTMP, SRT, or WebRTC (WHIP coming soon). Switch between inputs live in a browser-based production switcher. Fan-out to every platform at once: YouTube, Twitch, Kick, Facebook, or any custom RTMP/RTMPS endpoint.
 
 One stream in, or many. Every destination, simultaneously. No cloud middleman, no per-channel fees, no limits.
 
@@ -99,8 +97,8 @@ Media is handled by a custom Rust RTMP/FLV relay (`crates/api/src/rtmp/`, `egres
 plus **ffmpeg** subprocesses for transcoding and HLS. RTMP fan-out is forwarded (not
 re-encoded); the public watch page is the one transcoded output (`channel_hls.rs`).
 
-> A `GstPipelineController` exists behind a `gstreamer` Cargo feature but is **not built
-> by any image**, so it is effectively legacy. ffmpeg is the engine that ships.
+> A GStreamer compositor pipeline is in active development behind the `gstreamer` Cargo
+> feature. The media engine that ships today is ffmpeg.
 
 ## Requirements
 
@@ -171,7 +169,7 @@ On first run, a default API key is printed to the console. Copy it and enter it 
 ./dev-docker.sh
 ```
 
-Builds a dev image (no GStreamer, stub controller, debug logging) and starts on `http://localhost:8080`. The frontend is served directly by the API.
+Builds a dev image (stub controller, debug logging) and starts on `http://localhost:8080`. The frontend is served directly by the API.
 
 ### Podman
 
@@ -188,7 +186,7 @@ cd docker
 docker compose up --build
 ```
 
-Builds the production image (ffmpeg-based; the GStreamer feature is not built). Ports:
+Builds the production image (ffmpeg-based). Ports:
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
