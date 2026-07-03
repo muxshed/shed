@@ -131,6 +131,8 @@ impl EgressManager {
                 "-c:a".to_string(), "aac".to_string(),
                 "-b:a".to_string(), format!("{}k", cfg.audio_bitrate_kbps),
                 "-ar".to_string(), "48000".to_string(),
+                // Downmix to stereo: the native AAC encoder rejects 5.1/6-channel input.
+                "-ac".to_string(), "2".to_string(),
             ]);
 
             args.extend([

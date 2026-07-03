@@ -107,6 +107,10 @@ impl ChannelHls {
             format!("{}k", cfg.audio_bitrate_kbps),
             "-ar".into(),
             "48000".into(),
+            // Downmix to stereo — the native AAC encoder rejects 5.1/6-channel input
+            // ("Unsupported channel layout"), and destinations want stereo anyway.
+            "-ac".into(),
+            "2".into(),
             "-f".into(),
             "hls".into(),
             "-hls_time".into(),
