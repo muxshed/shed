@@ -32,26 +32,15 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
     let _ = state.ws_tx.send(WsEvent::ScheduleStarted { id: schedule_id });
     tracing::info!("playout: schedule {} on air ({} VOD items)", schedule_id, playlist.files.len());
 
-    let standby_id = ensure_standby(state, &standby_asset).await;
     let cfg = load_output_config(state).await;
     let (out_w, out_h, out_fps) = (cfg.width, cfg.height, cfg.fps);
-    let seq = if let Some(sid) = standby_id {
-        state.sequence_headers.read().await.get(&sid).cloned()
-    } else {
-        None
-    };
-    if let Err(e) = state
-        .egress
-        .start(schedule_id, destinations, state.program_tx.clone(), Some(cfg), seq)
-        .await
-    {
-        tracing::warn!("playout: egress start error (continuing): {}", e);
-    }
-    if let Some(sid) = standby_id {
-        let _ = state.program_intent.send(Some(sid));
-    }
-    state.pipeline.start(Vec::new()).await.ok();
 
+    // Start the VOD playing into the program BEFORE connecting egress, so each
+    // destination gets one clean, continuous RTMP session from the first frame —
+    // the same way manual go-live only connects egress once the source is live.
+    // Connecting egress early and then restarting it on the program splice makes
+    // YouTube stick on "Preparing stream": it latches onto the first, dying
+    // publish and never promotes the reconnect.
     let vod_source = Uuid::new_v4();
     let loop_forever = matches!(end_behavior, EndBehavior::Loop);
     crate::media_player::start_concat_playback(
@@ -61,7 +50,17 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
     .map_err(|e| format!("playlist playback: {}", e))?;
     tokio::time::sleep(Duration::from_millis(500)).await;
     let _ = state.program_intent.send(Some(vod_source));
-    crate::egress_restart_for(state, vod_source).await;
+    state.pipeline.start(Vec::new()).await.ok();
+
+    // Connect egress once, with the VOD already flowing (no restart, no reconnect).
+    let seq = state.sequence_headers.read().await.get(&vod_source).cloned();
+    if let Err(e) = state
+        .egress
+        .start(schedule_id, destinations, state.program_tx.clone(), Some(cfg), seq)
+        .await
+    {
+        tracing::warn!("playout: egress start error (continuing): {}", e);
+    }
     // Bring the public Channel watch page on air, same as a manual go-live.
     crate::routes::stream::ensure_channel_hls(state).await;
 
@@ -77,7 +76,7 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
         crate::media_player::stop_media_playback(state, &vod_source).await;
         match end_behavior {
             EndBehavior::Standby => {
-                if let Some(sid) = standby_id {
+                if let Some(sid) = ensure_standby(state, &standby_asset).await {
                     let _ = state.program_intent.send(Some(sid));
                     crate::egress_restart_for(state, sid).await;
                     // Follow the splice so the watch page keeps playing the standby card.
@@ -89,9 +88,6 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
                 state.channel_hls.stop().await;
                 state.pipeline.stop().await.ok();
                 let _ = state.program_intent.send(None);
-                if let Some(sid) = standby_id {
-                    crate::media_player::stop_media_playback(state, &sid).await;
-                }
                 let _ = state.active_schedule.send(None);
                 let _ = state.ws_tx.send(WsEvent::ScheduleEnded { id: schedule_id });
                 mark_run_ended(state, schedule_id).await;
