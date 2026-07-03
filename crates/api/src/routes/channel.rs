@@ -78,6 +78,13 @@ async fn load_or_create(state: &AppState) -> Result<ChannelRow, ApiError> {
 
 // ── Authenticated handlers ───────────────────────────────────────────────────
 
+/// Get the public channel config.
+#[utoipa::path(
+    get,
+    path = "/api/v1/channel",
+    tag = "channel",
+    responses((status = 200, description = "Channel config", body = muxshed_common::ChannelConfig))
+)]
 pub async fn get_channel(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ChannelConfig>, ApiError> {
@@ -85,13 +92,21 @@ pub async fn get_channel(
     Ok(Json(row_to_config(&row)))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateChannel {
     pub enabled: Option<bool>,
     pub title: Option<String>,
     pub accent: Option<Option<String>>,
 }
 
+/// Update the public channel config.
+#[utoipa::path(
+    put,
+    path = "/api/v1/channel",
+    tag = "channel",
+    request_body = UpdateChannel,
+    responses((status = 200, description = "Updated channel config", body = muxshed_common::ChannelConfig))
+)]
 pub async fn update_channel(
     State(state): State<Arc<AppState>>,
     Json(body): Json<UpdateChannel>,
@@ -126,6 +141,13 @@ pub async fn update_channel(
     Ok(Json(row_to_config(&row)))
 }
 
+/// Regenerate the channel watch token.
+#[utoipa::path(
+    post,
+    path = "/api/v1/channel/regenerate-token",
+    tag = "channel",
+    responses((status = 200, description = "Channel config with new token", body = muxshed_common::ChannelConfig))
+)]
 pub async fn regenerate_token(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ChannelConfig>, ApiError> {

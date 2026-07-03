@@ -11,18 +11,18 @@ use crate::error::ApiError;
 use crate::state::AppState;
 use muxshed_common::{Layer, LayerFit, MuxshedError, Position, Scene, Size, WsEvent};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateScene {
     pub name: String,
     pub layers: Option<Vec<CreateLayer>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateScene {
     pub name: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateLayer {
     pub source_id: Uuid,
     pub x: Option<i32>,
@@ -34,7 +34,7 @@ pub struct CreateLayer {
     pub fit: Option<LayerFit>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateLayer {
     pub source_id: Option<Uuid>,
     pub x: Option<i32>,
@@ -46,6 +46,13 @@ pub struct UpdateLayer {
     pub fit: Option<LayerFit>,
 }
 
+/// List all scenes.
+#[utoipa::path(
+    get,
+    path = "/api/v1/scenes",
+    tag = "scenes",
+    responses((status = 200, description = "Scenes", body = [muxshed_common::Scene]))
+)]
 pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Scene>>, ApiError> {
     let scene_rows = sqlx::query_as::<_, SceneRow>("SELECT id, name FROM scenes")
         .fetch_all(&state.db)
@@ -64,6 +71,14 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Scene>>
     Ok(Json(scenes))
 }
 
+/// Create a scene.
+#[utoipa::path(
+    post,
+    path = "/api/v1/scenes",
+    tag = "scenes",
+    request_body = CreateScene,
+    responses((status = 201, description = "Created scene", body = muxshed_common::Scene))
+)]
 pub async fn create(
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreateScene>,
@@ -94,6 +109,17 @@ pub async fn create(
     ))
 }
 
+/// Get a single scene by id.
+#[utoipa::path(
+    get,
+    path = "/api/v1/scenes/{id}",
+    tag = "scenes",
+    params(("id" = String, Path, description = "Scene id")),
+    responses(
+        (status = 200, description = "Scene", body = muxshed_common::Scene),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn get_one(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -113,6 +139,18 @@ pub async fn get_one(
     }))
 }
 
+/// Update a scene.
+#[utoipa::path(
+    put,
+    path = "/api/v1/scenes/{id}",
+    tag = "scenes",
+    params(("id" = String, Path, description = "Scene id")),
+    request_body = UpdateScene,
+    responses(
+        (status = 200, description = "Updated scene", body = muxshed_common::Scene),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -141,6 +179,17 @@ pub async fn update(
     }))
 }
 
+/// Delete a scene.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/scenes/{id}",
+    tag = "scenes",
+    params(("id" = String, Path, description = "Scene id")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -157,6 +206,17 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Activate a scene (make it the live program).
+#[utoipa::path(
+    post,
+    path = "/api/v1/scenes/{id}/activate",
+    tag = "scenes",
+    params(("id" = String, Path, description = "Scene id")),
+    responses(
+        (status = 200, description = "Activated"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn activate(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -195,6 +255,18 @@ async fn refresh_if_active(state: &Arc<AppState>, scene_id: &str) {
     }
 }
 
+/// Add a layer to a scene.
+#[utoipa::path(
+    post,
+    path = "/api/v1/scenes/{id}/layers",
+    tag = "scenes",
+    params(("id" = String, Path, description = "Scene id")),
+    request_body = CreateLayer,
+    responses(
+        (status = 201, description = "Created layer", body = muxshed_common::Layer),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn add_layer(
     State(state): State<Arc<AppState>>,
     Path(scene_id): Path<String>,
@@ -211,6 +283,21 @@ pub async fn add_layer(
     Ok((StatusCode::CREATED, Json(layer)))
 }
 
+/// Update a layer within a scene.
+#[utoipa::path(
+    put,
+    path = "/api/v1/scenes/{scene_id}/layers/{layer_id}",
+    tag = "scenes",
+    params(
+        ("scene_id" = String, Path, description = "Scene id"),
+        ("layer_id" = String, Path, description = "Layer id")
+    ),
+    request_body = UpdateLayer,
+    responses(
+        (status = 200, description = "Updated layer", body = muxshed_common::Layer),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn update_layer(
     State(state): State<Arc<AppState>>,
     Path((scene_id, layer_id)): Path<(String, String)>,
@@ -264,6 +351,20 @@ pub async fn update_layer(
     }))
 }
 
+/// Delete a layer from a scene.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/scenes/{scene_id}/layers/{layer_id}",
+    tag = "scenes",
+    params(
+        ("scene_id" = String, Path, description = "Scene id"),
+        ("layer_id" = String, Path, description = "Layer id")
+    ),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "Not found")
+    )
+)]
 pub async fn delete_layer(
     State(state): State<Arc<AppState>>,
     Path((scene_id, layer_id)): Path<(String, String)>,

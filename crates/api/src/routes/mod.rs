@@ -4,20 +4,20 @@ pub mod admin;
 mod assets;
 mod audio;
 mod auth;
-mod failover;
+pub mod failover;
 mod broadcast;
-mod channel;
+pub mod channel;
 mod preview;
-mod destinations;
+pub mod destinations;
 mod guests;
-mod keys;
+pub mod keys;
 pub mod output;
-mod recording;
-mod scenes;
-mod schedules;
+pub mod recording;
+pub mod scenes;
+pub mod schedules;
 mod setup;
-mod sources;
-mod status;
+pub mod sources;
+pub mod status;
 mod stingers;
 pub mod stream;
 mod switching;
@@ -219,6 +219,25 @@ pub fn build_router(
     }
 
     let mut router = Router::new().nest("/api/v1", api);
+
+    // Public OpenAPI document and interactive Scalar docs, on every instance.
+    {
+        use utoipa::OpenApi;
+        use utoipa_scalar::{Scalar, Servable};
+        let spec = crate::openapi::ApiDoc::openapi();
+        router = router
+            .route(
+                "/api/v1/openapi.json",
+                get({
+                    let spec = spec.clone();
+                    move || {
+                        let spec = spec.clone();
+                        async move { Json(spec) }
+                    }
+                }),
+            )
+            .merge(Scalar::with_url("/api/v1/docs", spec));
+    }
 
     if headless {
         // No web UI: a JSON notice at the root, JSON 404 for everything else.

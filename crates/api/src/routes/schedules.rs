@@ -13,10 +13,10 @@ use crate::schedule_time::{next_run_after, parse_tz};
 use crate::state::AppState;
 use muxshed_common::{EndBehavior, MuxshedError, Schedule, ScheduleItem, ScheduleItemKind, TriggerKind};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateItem { pub kind: ScheduleItemKind, pub ref_id: Uuid }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpsertSchedule {
     pub name: String,
     #[serde(default = "yes")] pub enabled: bool,
@@ -64,6 +64,13 @@ fn trigger_cols(t: &TriggerKind) -> (&'static str, Option<String>, Option<String
     }
 }
 
+/// List schedules.
+#[utoipa::path(
+    get,
+    path = "/api/v1/schedules",
+    tag = "schedules",
+    responses((status = 200, description = "List of schedules", body = [muxshed_common::Schedule]))
+)]
 pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Schedule>>, ApiError> {
     let ids = sqlx::query_as::<_, (String,)>("SELECT id FROM schedules ORDER BY created_at DESC")
         .fetch_all(&state.db).await?;
@@ -72,6 +79,14 @@ pub async fn list(State(state): State<Arc<AppState>>) -> Result<Json<Vec<Schedul
     Ok(Json(out))
 }
 
+/// Create a schedule.
+#[utoipa::path(
+    post,
+    path = "/api/v1/schedules",
+    tag = "schedules",
+    request_body = UpsertSchedule,
+    responses((status = 201, description = "Created", body = muxshed_common::Schedule))
+)]
 pub async fn create(
     State(state): State<Arc<AppState>>, Json(body): Json<UpsertSchedule>,
 ) -> Result<(StatusCode, Json<Schedule>), ApiError> {
@@ -96,6 +111,15 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(s)))
 }
 
+/// Update a schedule.
+#[utoipa::path(
+    put,
+    path = "/api/v1/schedules/{id}",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule id")),
+    request_body = UpsertSchedule,
+    responses((status = 200, description = "Updated", body = muxshed_common::Schedule))
+)]
 pub async fn update(
     State(state): State<Arc<AppState>>, Path(id): Path<String>, Json(body): Json<UpsertSchedule>,
 ) -> Result<Json<Schedule>, ApiError> {
@@ -116,6 +140,14 @@ pub async fn update(
     Ok(Json(load_schedule(&state, &id).await?.ok_or_else(|| MuxshedError::NotFound(id.clone()))?))
 }
 
+/// Delete a schedule.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/schedules/{id}",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule id")),
+    responses((status = 204, description = "Deleted"))
+)]
 pub async fn delete(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Result<StatusCode, ApiError> {
     let r = sqlx::query("DELETE FROM schedules WHERE id=?").bind(&id).execute(&state.db).await?;
     if r.rows_affected() == 0 { return Err(MuxshedError::NotFound(format!("schedule {id}")).into()); }
@@ -123,6 +155,14 @@ pub async fn delete(State(state): State<Arc<AppState>>, Path(id): Path<String>) 
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Run a schedule immediately.
+#[utoipa::path(
+    post,
+    path = "/api/v1/schedules/{id}/run",
+    tag = "schedules",
+    params(("id" = String, Path, description = "Schedule id")),
+    responses((status = 200, description = "Started"))
+)]
 pub async fn run_now(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Result<StatusCode, ApiError> {
     let sid: Uuid = id.parse().map_err(|_| MuxshedError::BadRequest("bad id".into()))?;
     if state.active_schedule.borrow().is_some() {
@@ -132,20 +172,42 @@ pub async fn run_now(State(state): State<Arc<AppState>>, Path(id): Path<String>)
     Ok(StatusCode::OK)
 }
 
+/// Stop the active broadcast.
+#[utoipa::path(
+    post,
+    path = "/api/v1/schedules/stop",
+    tag = "schedules",
+    responses((status = 200, description = "Stopped"))
+)]
 pub async fn stop(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiError> {
     crate::playout::stop_broadcast(&state).await;
     Ok(StatusCode::OK)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct TzBody { pub timezone: String }
 
+/// Get the system timezone.
+#[utoipa::path(
+    get,
+    path = "/api/v1/settings/timezone",
+    tag = "schedules",
+    responses((status = 200, description = "Current timezone", body = TzBody))
+)]
 pub async fn get_timezone(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>, ApiError> {
     let tz = sqlx::query_as::<_, (String,)>("SELECT value FROM settings WHERE key='system_timezone'")
         .fetch_optional(&state.db).await?.map(|r| r.0).unwrap_or_else(|| "UTC".into());
     Ok(Json(serde_json::json!({ "timezone": tz })))
 }
 
+/// Set the system timezone.
+#[utoipa::path(
+    put,
+    path = "/api/v1/settings/timezone",
+    tag = "schedules",
+    request_body = TzBody,
+    responses((status = 200, description = "Updated timezone", body = TzBody))
+)]
 pub async fn set_timezone(State(state): State<Arc<AppState>>, Json(b): Json<TzBody>) -> Result<Json<serde_json::Value>, ApiError> {
     if b.timezone.parse::<chrono_tz::Tz>().is_err() {
         return Err(MuxshedError::BadRequest("unknown timezone".into()).into());

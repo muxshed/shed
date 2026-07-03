@@ -4,12 +4,20 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::Json;
 use serde::Serialize;
+use utoipa::ToSchema;
 use std::sync::Arc;
 
 use crate::error::ApiError;
 use crate::state::AppState;
 use muxshed_common::{MuxshedError, PipelineState};
 
+/// Start recording the program output.
+#[utoipa::path(
+    post,
+    path = "/api/v1/record/start",
+    tag = "recording",
+    responses((status = 200, description = "Recording started"))
+)]
 pub async fn start(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiError> {
     let current = state.pipeline.state().await;
     if !matches!(current, PipelineState::Live { .. }) {
@@ -29,6 +37,13 @@ pub async fn start(State(state): State<Arc<AppState>>) -> Result<StatusCode, Api
     Ok(StatusCode::OK)
 }
 
+/// Stop the active recording.
+#[utoipa::path(
+    post,
+    path = "/api/v1/record/stop",
+    tag = "recording",
+    responses((status = 200, description = "Recording stopped"))
+)]
 pub async fn stop(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiError> {
     let rec = state.pipeline.recording_state().await;
     if !rec.recording {
@@ -40,13 +55,20 @@ pub async fn stop(State(state): State<Arc<AppState>>) -> Result<StatusCode, ApiE
     Ok(StatusCode::OK)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct RecordingResponse {
     pub recording: bool,
     pub path: Option<String>,
     pub started_at: Option<String>,
 }
 
+/// Current recording status.
+#[utoipa::path(
+    get,
+    path = "/api/v1/record/status",
+    tag = "recording",
+    responses((status = 200, description = "Recording status", body = RecordingResponse))
+)]
 pub async fn status(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<RecordingResponse>, ApiError> {
