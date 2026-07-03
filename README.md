@@ -25,6 +25,8 @@ This started years ago as a passion project to understand the complexities of mu
   backup ingress) so your destinations stay connected, then switches back when it returns
 - **Public watch page** — broadcast to your own self-hosted, unlisted `/watch/<token>`
   page with optional viewer password and custom branding (no external destination required)
+- **Scheduled broadcasts** — upload videos and have them go to air on their own, at a set
+  time or on a repeating schedule: a single premiere, a playlist, or a looping 24/7 channel
 - Scene management with a multi-layer compositor and per-layer fit (fill / contain / cover)
 - **Browser and media sources** — add a live web page, or an image/video from the library,
   as a scene layer
@@ -53,6 +55,21 @@ optionally add a viewer password, and share the unlisted link (`/watch/<token>`)
   when the broadcast begins — no refresh needed.
 - The link is unlisted; add a password to restrict it further. Regenerate the link any
   time to revoke access.
+
+## Scheduled Broadcasts
+
+Upload videos to the library and have them go to air on their own — no operator at the desk.
+Open the **Schedules** section and build a schedule from one or more videos.
+
+- Fire once at a set date and time, or repeat on a cron schedule. Times are evaluated in a
+  timezone you pick for the instance (set it under Settings), so DST is handled correctly.
+- Add several videos to a playlist and they play back-to-back as one continuous stream,
+  scaled onto a common canvas so mixed resolutions join cleanly.
+- Pick what happens when the playlist ends: stop, hold on a standby card, or loop the whole
+  playlist as an always-on 24/7 channel.
+- A scheduled broadcast airs to the destinations you choose (or every enabled destination)
+  and your public watch page, exactly like a manual go-live. Edit or air a schedule on
+  demand from the same screen.
 
 ## Stream Deck & Bitfocus Companion
 
@@ -238,6 +255,10 @@ POST   /api/v1/transition/stinger    Trigger stinger transition
 
 POST   /api/v1/record/start          Start recording
 POST   /api/v1/record/stop           Stop recording
+
+GET    /api/v1/schedules             List schedules
+POST   /api/v1/schedules             Create a schedule
+POST   /api/v1/schedules/:id/run     Air a schedule now
 
 GET    /api/v1/ws?key=API_KEY        WebSocket for real-time state updates
 ```

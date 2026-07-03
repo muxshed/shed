@@ -64,34 +64,40 @@ async fn run_broadcast(state: &Arc<AppState>, schedule_id: Uuid) -> Result<(), S
     // Bring the public Channel watch page on air, same as a manual go-live.
     crate::routes::stream::ensure_channel_hls(state).await;
 
-    if !matches!(end_behavior, EndBehavior::Loop) {
-        let dur = Duration::from_millis(playlist.total_ms.max(1000));
-        tokio::select! {
-            _ = tokio::time::sleep(dur) => {}
-            _ = wait_until_deactivated(state, schedule_id) => {
-                crate::media_player::stop_media_playback(state, &vod_source).await;
-                return Ok(());
+    if matches!(end_behavior, EndBehavior::Loop) {
+        // A 24/7 loop runs until the operator stops it. Wait for that, then stop the
+        // concat player so its ffmpeg doesn't linger past the broadcast.
+        wait_until_deactivated(state, schedule_id).await;
+        crate::media_player::stop_media_playback(state, &vod_source).await;
+        return Ok(());
+    }
+
+    let dur = Duration::from_millis(playlist.total_ms.max(1000));
+    tokio::select! {
+        _ = tokio::time::sleep(dur) => {}
+        _ = wait_until_deactivated(state, schedule_id) => {
+            crate::media_player::stop_media_playback(state, &vod_source).await;
+            return Ok(());
+        }
+    }
+    crate::media_player::stop_media_playback(state, &vod_source).await;
+    match end_behavior {
+        EndBehavior::Standby => {
+            if let Some(sid) = ensure_standby(state, &standby_asset).await {
+                let _ = state.program_intent.send(Some(sid));
+                crate::egress_restart_for(state, sid).await;
+                // Follow the splice so the watch page keeps playing the standby card.
+                crate::routes::stream::ensure_channel_hls(state).await;
             }
         }
-        crate::media_player::stop_media_playback(state, &vod_source).await;
-        match end_behavior {
-            EndBehavior::Standby => {
-                if let Some(sid) = ensure_standby(state, &standby_asset).await {
-                    let _ = state.program_intent.send(Some(sid));
-                    crate::egress_restart_for(state, sid).await;
-                    // Follow the splice so the watch page keeps playing the standby card.
-                    crate::routes::stream::ensure_channel_hls(state).await;
-                }
-            }
-            _ => {
-                state.egress.stop().await;
-                state.channel_hls.stop().await;
-                state.pipeline.stop().await.ok();
-                let _ = state.program_intent.send(None);
-                let _ = state.active_schedule.send(None);
-                let _ = state.ws_tx.send(WsEvent::ScheduleEnded { id: schedule_id });
-                mark_run_ended(state, schedule_id).await;
-            }
+        _ => {
+            state.egress.stop().await;
+            state.channel_hls.stop().await;
+            state.pipeline.stop().await.ok();
+            let _ = state.program_intent.send(None);
+            let _ = state.active_schedule.send(None);
+            let _ = state.ws_tx.send(WsEvent::ScheduleEnded { id: schedule_id });
+            mark_run_ended(state, schedule_id).await;
         }
     }
     Ok(())
