@@ -83,6 +83,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (program_source_tx, _program_source_rx) = watch::channel::<Option<uuid::Uuid>>(None);
     let (program_intent_tx, _program_intent_rx) = watch::channel::<Option<uuid::Uuid>>(None);
     let (failover_active_tx, _failover_active_rx) = watch::channel::<bool>(false);
+    let (active_schedule_tx, _active_schedule_rx) = watch::channel::<Option<uuid::Uuid>>(None);
+    let (schedule_nudge_tx, _schedule_nudge_rx) = watch::channel::<u64>(0);
     let saved_audio_routing: muxshed_api::state::AudioRouting = sqlx::query_as::<_, (String,)>(
         "SELECT value FROM settings WHERE key = 'audio_routing'",
     )
@@ -121,6 +123,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         program_source: program_source_tx,
         program_intent: program_intent_tx,
         failover_active: failover_active_tx,
+        active_schedule: active_schedule_tx,
+        schedule_nudge: schedule_nudge_tx,
         preview_source: RwLock::new(None),
         audio_routing: audio_routing_tx,
         system_token,
@@ -186,6 +190,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let failover_state = state.clone();
     tokio::spawn(async move {
         muxshed_api::failover::run_failover_supervisor(failover_state).await;
+    });
+
+    let scheduler_state = state.clone();
+    tokio::spawn(async move {
+        muxshed_api::scheduler::run_scheduler(scheduler_state).await;
     });
 
     let rtmp_state = state.clone();

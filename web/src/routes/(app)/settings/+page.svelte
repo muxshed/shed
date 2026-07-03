@@ -4,6 +4,7 @@
 	import { api } from '$lib/api';
 	import { notify } from '$lib/notify';
 	import type { User, Source, FailoverConfig } from '$lib/types';
+	import TimezonePicker from '../../../components/TimezonePicker.svelte';
 
 	// Password change
 	let currentPassword = $state('');
@@ -34,11 +35,16 @@
 	let sources = $state<Source[]>([]);
 	let failoverSaving = $state(false);
 
+	// System timezone
+	let systemTz = $state('UTC');
+	let tzSaving = $state(false);
+
 	onMount(async () => {
 		fxOff = localStorage.getItem('muxshed-fx') === 'off';
 		await refreshUsers();
 		try {
 			[failover, sources] = await Promise.all([api.getFailover(), api.listSources()]);
+			systemTz = (await api.getTimezone()).timezone;
 		} catch (e) {
 			notify.error(e);
 		}
@@ -58,6 +64,13 @@
 		} finally {
 			failoverSaving = false;
 		}
+	}
+
+	async function saveTz() {
+		tzSaving = true;
+		try { systemTz = (await api.setTimezone(systemTz)).timezone; notify.success('Timezone saved'); }
+		catch (e) { notify.error(e); }
+		finally { tzSaving = false; }
 	}
 
 	function toggleFx() {
@@ -319,6 +332,16 @@
 			<button onclick={saveFailover} disabled={failoverSaving} class="btn btn--go mt-3">
 				{failoverSaving ? 'Saving…' : 'Save failover settings'}
 			</button>
+		</div>
+	</section>
+
+	<!-- System Timezone -->
+	<section class="panel">
+		<header class="panel__head">▮ System Timezone</header>
+		<div class="panel__body">
+			<p class="mb-2 text-xs text-amber-dim">All schedules are evaluated in this timezone. Search by city or region.</p>
+			<div class="mb-2"><TimezonePicker bind:value={systemTz} /></div>
+			<button onclick={saveTz} disabled={tzSaving} class="btn btn--go">{tzSaving ? 'Saving…' : 'Save timezone'}</button>
 		</div>
 	</section>
 

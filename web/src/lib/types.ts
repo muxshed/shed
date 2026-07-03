@@ -71,6 +71,18 @@ export interface Scene {
 	layers: Layer[];
 }
 
+export type EndBehavior = 'stop' | 'loop' | 'standby';
+export type ScheduleItemKind = 'vod' | 'scene' | 'source';
+export type Trigger = { kind: 'once'; at: string } | { kind: 'cron'; expr: string };
+
+export interface ScheduleItem { id: string; position: number; kind: ScheduleItemKind; ref_id: string; }
+export interface Schedule {
+	id: string; name: string; enabled: boolean; trigger: Trigger;
+	destination_ids: string[]; standby_asset_id: string | null;
+	end_behavior: EndBehavior; until_at: string | null;
+	items: ScheduleItem[]; next_run_at: string | null;
+}
+
 export interface User {
 	id: string;
 	username: string;
@@ -240,4 +252,7 @@ export type WsEvent =
 			type: 'failover_state';
 			payload: { active: boolean; fallback_source_id: string | null; intent_source_id: string | null };
 	  }
+	| { type: 'schedule_started'; payload: { id: string } }
+	| { type: 'schedule_ended'; payload: { id: string } }
+	| { type: 'schedule_skipped'; payload: { id: string; reason: string } }
 	| { type: 'error'; payload: { message: string; code: string } };

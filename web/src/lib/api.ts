@@ -1,6 +1,6 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
-import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, LayerFit, RecordingState, StingerConfig, StingerAudio, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig, WebrtcConfig, FailoverConfig } from './types';
+import type { Source, SourceKind, Destination, DestinationKind, ApiKey, Scene, Layer, LayerFit, RecordingState, StingerConfig, StingerAudio, Guest, BroadcastConfig, OutputConfig, OutputStats, AudioRouting, Asset, AssetFolder, User, ChannelConfig, WebrtcConfig, FailoverConfig, Schedule } from './types';
 
 function getSessionToken(): string {
 	if (typeof window === 'undefined') return '';
@@ -146,6 +146,16 @@ export const api = {
 	setFailover: (config: FailoverConfig) =>
 		request<FailoverConfig>('/failover', { method: 'PUT', body: JSON.stringify(config) }),
 	getOutputStats: () => request<OutputStats>('/output/stats'),
+
+	// Schedules (VOD scheduling)
+	listSchedules: () => request<Schedule[]>('/schedules'),
+	createSchedule: (s: object) => request<Schedule>('/schedules', { method: 'POST', body: JSON.stringify(s) }),
+	updateSchedule: (id: string, s: object) => request<Schedule>(`/schedules/${id}`, { method: 'PUT', body: JSON.stringify(s) }),
+	deleteSchedule: (id: string) => request<void>(`/schedules/${id}`, { method: 'DELETE' }),
+	runSchedule: (id: string) => request<void>(`/schedules/${id}/run`, { method: 'POST' }),
+	stopSchedule: () => request<void>('/schedules/stop', { method: 'POST' }),
+	getTimezone: () => request<{ timezone: string }>('/settings/timezone'),
+	setTimezone: (timezone: string) => request<{ timezone: string }>('/settings/timezone', { method: 'PUT', body: JSON.stringify({ timezone }) }),
 
 	// WebRTC / guest ICE config
 	getWebrtcConfig: () => request<WebrtcConfig>('/webrtc/config'),
