@@ -207,23 +207,40 @@ async fn load_destinations(state: &AppState, schedule_id: Uuid) -> Vec<muxshed_c
         .ok()
         .flatten();
     let ids: Vec<String> = row.and_then(|r| serde_json::from_str(&r.0).ok()).unwrap_or_default();
-    let mut out = Vec::new();
-    for id in ids {
-        if let Ok(Some(d)) = sqlx::query_as::<_, (String, String, String, i64)>(
-            "SELECT id, name, kind, enabled FROM destinations WHERE id = ?",
-        )
-        .bind(&id)
-        .fetch_optional(&state.db)
-        .await
-        {
-            if let Ok(kind) = serde_json::from_str::<DestinationKind>(&d.2) {
-                out.push(muxshed_common::Destination {
-                    id: d.0.parse().unwrap_or_default(),
-                    name: d.1,
-                    kind,
-                    enabled: d.3 != 0,
-                });
+
+    // Mirror the manual go-live behaviour (routes/stream.rs): stream to the schedule's
+    // selected destinations that are enabled, or — when the schedule selects none — to
+    // every enabled destination. Only enabled destinations are ever used.
+    let rows: Vec<(String, String, String, i64)> = if ids.is_empty() {
+        sqlx::query_as("SELECT id, name, kind, enabled FROM destinations WHERE enabled = 1")
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default()
+    } else {
+        let mut acc = Vec::new();
+        for id in &ids {
+            if let Ok(Some(d)) = sqlx::query_as::<_, (String, String, String, i64)>(
+                "SELECT id, name, kind, enabled FROM destinations WHERE id = ? AND enabled = 1",
+            )
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await
+            {
+                acc.push(d);
             }
+        }
+        acc
+    };
+
+    let mut out = Vec::new();
+    for d in rows {
+        if let Ok(kind) = serde_json::from_str::<DestinationKind>(&d.2) {
+            out.push(muxshed_common::Destination {
+                id: d.0.parse().unwrap_or_default(),
+                name: d.1,
+                kind,
+                enabled: d.3 != 0,
+            });
         }
     }
     out
