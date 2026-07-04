@@ -18,7 +18,26 @@
 	import { popout } from '$lib/popout';
 	import PopoutButton from '../../components/PopoutButton.svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import Dialog from '$lib/components/ui/dialog/Dialog.svelte';
 	import { notify } from '$lib/notify';
+
+	// Output config popup
+	let showOutput = $state(false);
+	let draft = $state<OutputConfig>({
+		video_bitrate_kbps: 4500,
+		audio_bitrate_kbps: 160,
+		width: 1920,
+		height: 1080,
+		fps: 30,
+	});
+	let resSelect = $state('1080p');
+	const RES_PRESETS = [
+		{ label: '2160p', w: 3840, h: 2160 },
+		{ label: '1440p', w: 2560, h: 1440 },
+		{ label: '1080p', w: 1920, h: 1080 },
+		{ label: '720p', w: 1280, h: 720 },
+		{ label: '480p', w: 854, h: 480 },
+	];
 
 	let stingers = $state<StingerConfig[]>([]);
 	let assets = $state<Asset[]>([]);
@@ -220,6 +239,31 @@
 		}
 	}
 
+	function openOutput() {
+		draft = { ...outputConfig };
+		const m = RES_PRESETS.find((p) => p.w === draft.width && p.h === draft.height);
+		resSelect = m ? m.label : 'custom';
+		showOutput = true;
+	}
+
+	function onResChange() {
+		const p = RES_PRESETS.find((x) => x.label === resSelect);
+		if (p) {
+			draft.width = p.w;
+			draft.height = p.h;
+		}
+	}
+
+	async function saveOutput() {
+		try {
+			outputConfig = await api.setOutputConfig(draft);
+			showOutput = false;
+			notify.success($isLive ? 'Output config applied' : 'Output config saved');
+		} catch (e) {
+			notify.error(e);
+		}
+	}
+
 	function formatBytes(bytes: number): string {
 		if (bytes < 1024) return `${bytes} B`;
 		if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -375,7 +419,15 @@
 		<div class="mb-4 grid grid-cols-2 gap-4">
 			<!-- Config (under Program) -->
 			<section class="panel">
-				<header class="panel__head">▮ OUTPUT CONFIG</header>
+				<header class="panel__head flex items-center justify-between">
+					<span>▮ OUTPUT CONFIG</span>
+					<button
+						onclick={openOutput}
+						class="btn btn--ghost"
+						style="min-height:20px;padding:1px 8px;font-size:11px"
+						aria-label="Edit output config">Edit</button
+					>
+				</header>
 				<div class="panel__body space-y-1">
 					<div class="flex justify-between">
 						<span class="text-amber-dim">Resolution</span>
@@ -653,3 +705,56 @@
 				</div>
 			</section>
 </div>
+
+<Dialog bind:open={showOutput}>
+	<div class="panel w-[380px] max-w-[90vw]">
+		<header class="panel__head flex items-center justify-between">
+			<span>▮ OUTPUT CONFIG</span>
+			<button onclick={() => (showOutput = false)} class="text-amber-muted hover:text-amber-bright" aria-label="Close">✕</button>
+		</header>
+		<div class="panel__body space-y-3">
+			{#if $isLive}
+				<p class="text-[11px] text-amber-bright">You are live. Saving will briefly reconnect your destinations.</p>
+			{/if}
+			<div>
+				<label class="field-label" for="oc-res">Resolution</label>
+				<select id="oc-res" bind:value={resSelect} onchange={onResChange} class="select w-full">
+					{#each RES_PRESETS as p}<option value={p.label}>{p.label} ({p.w}x{p.h})</option>{/each}
+					<option value="custom">Custom</option>
+				</select>
+			</div>
+			{#if resSelect === 'custom'}
+				<div class="grid grid-cols-2 gap-2">
+					<div>
+						<label class="field-label" for="oc-w">Width</label>
+						<input id="oc-w" type="number" min="160" max="3840" bind:value={draft.width} class="input" />
+					</div>
+					<div>
+						<label class="field-label" for="oc-h">Height</label>
+						<input id="oc-h" type="number" min="120" max="2160" bind:value={draft.height} class="input" />
+					</div>
+				</div>
+			{/if}
+			<div>
+				<label class="field-label" for="oc-fps">Frame rate</label>
+				<select id="oc-fps" bind:value={draft.fps} class="select w-full">
+					{#each [24, 25, 30, 50, 60] as f}<option value={f}>{f} fps</option>{/each}
+				</select>
+			</div>
+			<div>
+				<label class="field-label" for="oc-vb">Video bitrate (kbps)</label>
+				<input id="oc-vb" type="number" min="500" max="20000" step="100" bind:value={draft.video_bitrate_kbps} class="input" />
+			</div>
+			<div>
+				<label class="field-label" for="oc-ab">Audio bitrate (kbps)</label>
+				<select id="oc-ab" bind:value={draft.audio_bitrate_kbps} class="select w-full">
+					{#each [96, 128, 160, 192, 256] as a}<option value={a}>{a} kbps</option>{/each}
+				</select>
+			</div>
+			<div class="flex gap-2 pt-1">
+				<button onclick={saveOutput} class="btn btn--go">Save</button>
+				<button onclick={() => (showOutput = false)} class="btn btn--ghost">Cancel</button>
+			</div>
+		</div>
+	</div>
+</Dialog>

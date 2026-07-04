@@ -1706,7 +1706,7 @@ dependencies = [
 
 [[package]]
 name = "muxshed-api"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -1743,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "muxshed-common"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "chrono",
  "serde",
@@ -1755,7 +1755,7 @@ dependencies = [
 
 [[package]]
 name = "muxshed-processor"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "async-trait",
  "chrono",

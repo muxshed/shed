@@ -75,8 +75,15 @@ pub async fn get_config(
 )]
 pub async fn set_config(
     State(state): State<Arc<AppState>>,
-    Json(config): Json<OutputConfig>,
+    Json(mut config): Json<OutputConfig>,
 ) -> Result<Json<OutputConfig>, ApiError> {
+    // Clamp defensively so a bad value can't wedge the encoder.
+    config.width = config.width.clamp(160, 3840);
+    config.height = config.height.clamp(120, 2160);
+    config.fps = config.fps.clamp(1, 60);
+    config.video_bitrate_kbps = config.video_bitrate_kbps.clamp(500, 20000);
+    config.audio_bitrate_kbps = config.audio_bitrate_kbps.clamp(32, 320);
+
     let json = serde_json::to_string(&config)
         .map_err(|e| muxshed_common::MuxshedError::Internal(e.to_string()))?;
 
@@ -84,6 +91,21 @@ pub async fn set_config(
         .bind(&json)
         .execute(&state.db)
         .await?;
+
+    // Apply immediately if a stream is live: restart the egress and the watch-page
+    // encoder with the new config (a brief destination reconnect, like failover).
+    let live = !matches!(
+        state.pipeline.state().await,
+        muxshed_common::PipelineState::Idle | muxshed_common::PipelineState::Stopping
+    );
+    if live {
+        state.egress.set_output_config(Some(config.clone())).await;
+        let program_src = *state.program_source.borrow();
+        if let Some(src) = program_src {
+            crate::egress_restart_for(&state, src).await;
+        }
+        crate::routes::stream::ensure_channel_hls(&state).await;
+    }
 
     Ok(Json(config))
 }
