@@ -64,6 +64,15 @@ impl EgressManager {
             .await;
     }
 
+    /// Update the output config used on the next restart. Used to apply an
+    /// output-config change (resolution, bitrate) to a live stream: set it, then
+    /// call `restart` so the encoder comes back with the new settings.
+    pub async fn set_output_config(&self, cfg: Option<crate::routes::output::OutputConfig>) {
+        if let Some(params) = self.restart_params.lock().await.as_mut() {
+            params.2 = cfg;
+        }
+    }
+
     pub async fn start(
         &self,
         _source_id: Uuid,
