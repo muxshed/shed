@@ -8,7 +8,7 @@
 	import type { SourceKind } from '$lib/types';
 
 	let name = $state('');
-	let protocol = $state<'rtmp' | 'srt' | 'browser'>('rtmp');
+	let protocol = $state<'rtmp' | 'srt' | 'browser' | 'webrtc'>('rtmp');
 	let srtPassphrase = $state('');
 	let browserUrl = $state('');
 	let creating = $state(false);
@@ -33,6 +33,8 @@
 			} else if (protocol === 'browser') {
 				if (!browserUrl.trim()) return;
 				kind = { type: 'browser', url: browserUrl.trim() };
+			} else if (protocol === 'webrtc') {
+				kind = { type: 'web_rtc', token: '' };
 			} else {
 				kind = { type: 'rtmp', stream_key: '' };
 			}
@@ -62,6 +64,7 @@
 							<option value="rtmp">RTMP</option>
 							<option value="srt">SRT</option>
 							<option value="browser">Browser</option>
+							<option value="webrtc">WHIP (WebRTC)</option>
 						</select>
 					</div>
 					<div class="flex-1">

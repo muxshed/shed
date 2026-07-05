@@ -74,6 +74,8 @@ impl Modify for SecurityAddon {
         crate::routes::output::get_config,
         crate::routes::output::set_config,
         crate::routes::output::get_stats,
+        crate::routes::whip::publish,
+        crate::routes::whip::teardown,
     ),
     components(schemas(
         muxshed_common::Source,

@@ -6,6 +6,7 @@ pub mod openapi;
 pub mod egress;
 pub mod failover;
 pub mod guest_webrtc;
+pub mod webrtc_ingest;
 pub mod media_player;
 pub mod media_probe;
 pub mod playout;

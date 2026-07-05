@@ -26,6 +26,8 @@ pub struct AppState {
     pub srt_listeners: RwLock<HashMap<Uuid, tokio::process::Child>>,
     /// Live WebRTC guest peer connections, kept alive while the guest is connected
     pub guest_peers: RwLock<HashMap<Uuid, Arc<webrtc::peer_connection::RTCPeerConnection>>>,
+    /// WHIP publish sessions: session id -> source id, for DELETE teardown.
+    pub whip_sessions: RwLock<HashMap<Uuid, Uuid>>,
     /// Scene compositors (ffmpeg) keyed by scene id — composite a scene's layers
     pub scene_compositors: RwLock<HashMap<Uuid, tokio::process::Child>>,
     /// Headless Chrome processes for browser sources

@@ -68,6 +68,7 @@ async fn setup() -> (axum::Router<()>, String, Arc<AppState>) {
         source_normalizers: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         srt_listeners: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         guest_peers: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        whip_sessions: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         scene_compositors: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         browser_sources: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         program_tx,
@@ -886,4 +887,112 @@ async fn test_schedule_crud_and_timezone() {
     let req = json_request("POST", "/api/v1/schedules", &key, Some(bad));
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+// --- WHIP ingest tests ---
+
+#[tokio::test]
+async fn test_whip_requires_bearer() {
+    let (app, _key, _state) = setup().await;
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/whip")
+        .body(Body::from("v=0\r\n"))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_whip_rejects_unknown_token() {
+    let (app, _key, _state) = setup().await;
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/whip")
+        .header("Authorization", "Bearer nope_not_a_real_token")
+        .body(Body::from("v=0\r\n"))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_whip_conflict_when_already_live() {
+    let (app, _key, state) = setup().await;
+
+    // Insert a persistent web_rtc source with a known token.
+    let id = uuid::Uuid::new_v4();
+    let token = "whip_test_token_1234";
+    let kind = format!(r#"{{"type":"web_rtc","token":"{}"}}"#, token);
+    sqlx::query("INSERT INTO sources (id, name, kind) VALUES (?, ?, ?)")
+        .bind(id.to_string())
+        .bind("WHIP Cam")
+        .bind(&kind)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    // Mark it already live so publish must return 409 before touching ffmpeg.
+    state
+        .source_states
+        .write()
+        .await
+        .insert(id, muxshed_common::SourceState::Live);
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/whip")
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from("v=0\r\n"))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn test_whip_rejects_guest_token() {
+    // A guest's ephemeral source uses SourceKind::WebRtc with the guest's token,
+    // but /whip must not accept it (guests publish via /guest/{token}/whip). If it
+    // did, teardown would run as Persistent and leak the guest row.
+    let (app, _key, state) = setup().await;
+
+    let sid = uuid::Uuid::new_v4();
+    let token = "guest_token_abcdef12";
+    let kind = format!(r#"{{"type":"web_rtc","token":"{}"}}"#, token);
+    sqlx::query("INSERT INTO sources (id, name, kind) VALUES (?, ?, ?)")
+        .bind(sid.to_string())
+        .bind("Bob (guest)")
+        .bind(&kind)
+        .execute(&state.db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO guests (id, name, token, source_id) VALUES (?, ?, ?, ?)")
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind("Bob")
+        .bind(token)
+        .bind(sid.to_string())
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/whip")
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from("v=0\r\n"))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_whip_teardown_unknown_session_is_noop() {
+    let (app, _key, _state) = setup().await;
+    let req = Request::builder()
+        .method("DELETE")
+        .uri(format!("/api/v1/whip/{}", uuid::Uuid::new_v4()))
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 }
