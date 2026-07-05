@@ -372,22 +372,35 @@ async fn build_peer(state: &AppState) -> Result<Arc<RTCPeerConnection>, String> 
         RTPCodecType::Video,
     )
     .map_err(|e| format!("register vp8: {}", e))?;
-    m.register_codec(
-        RTCRtpCodecParameters {
-            capability: RTCRtpCodecCapability {
-                mime_type: MIME_TYPE_H264.to_owned(),
-                clock_rate: 90000,
-                channels: 0,
-                sdp_fmtp_line: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
-                    .to_owned(),
-                rtcp_feedback: vec![],
+    // webrtc-rs matches an H.264 offer strictly by its profile-level-id, so a
+    // single registered variant rejects encoders that use a different profile
+    // (OBS commonly offers High profile). Register the same broad set of H.264
+    // profile/packetization variants webrtc-rs uses by default, which matches
+    // Chrome, Firefox, Safari, and OBS. Whatever profile is negotiated, the pump
+    // reads the track's mime as H.264 and forwards it the same way.
+    for (pt, fmtp) in [
+        (102u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"),
+        (127u8, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f"),
+        (125u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"),
+        (108u8, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f"),
+        (123u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032"),
+    ] {
+        m.register_codec(
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: fmtp.to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: pt,
+                ..Default::default()
             },
-            payload_type: 102,
-            ..Default::default()
-        },
-        RTPCodecType::Video,
-    )
-    .map_err(|e| format!("register h264: {}", e))?;
+            RTPCodecType::Video,
+        )
+        .map_err(|e| format!("register h264 {}: {}", pt, e))?;
+    }
     m.register_codec(
         RTCRtpCodecParameters {
             capability: RTCRtpCodecCapability {
