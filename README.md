@@ -1,6 +1,6 @@
 <img src=".github/images/logo.svg" alt="Muxshed" width="300" />
 
-Self-hosted multistream studio. Ingest from any source (OBS, hardware encoders, mobile, browser) over RTMP, SRT, or WebRTC (WHIP coming soon). Switch between inputs live in a browser-based production switcher. Fan-out to every platform at once: YouTube, Twitch, Kick, Facebook, or any custom RTMP/RTMPS endpoint.
+Self-hosted multistream studio. Ingest from any source (OBS, hardware encoders, mobile, browser) over RTMP, SRT, or WebRTC (WHIP). Switch between inputs live in a browser-based production switcher. Fan-out to every platform at once: YouTube, Twitch, Kick, Facebook, or any custom RTMP/RTMPS endpoint.
 
 One stream in, or many. Every destination, simultaneously. No cloud middleman, no per-channel fees, no limits.
 
@@ -16,7 +16,7 @@ This started years ago as a passion project to understand the complexities of mu
 
 ## Features
 
-- RTMP and SRT ingest from OBS, encoders, or any streaming software
+- RTMP, SRT, and WHIP (WebRTC) ingest from OBS, hardware encoders, or any streaming software
 - Fan-out to YouTube, Twitch, Kick, and any custom RTMP/RTMPS endpoint
 - **Program failover.** When your source goes offline (e.g. an IRL stream drops), the
   program automatically switches to a fallback source (a "be right back" image/video or a
@@ -38,8 +38,11 @@ This started years ago as a passion project to understand the complexities of mu
 - Real-time WebSocket state feed
 - Stream Deck and Bitfocus Companion control
 
-### Coming Soon
-- WHIP (WebRTC) ingest
+## WHIP (WebRTC) Ingest
+
+WHIP ingest lets encoders like OBS 30 and later, hardware encoders, or a browser publish
+directly over WebRTC. Create a WHIP source, then paste its URL and bearer token into your
+encoder's WHIP settings. Video is accepted as H.264 or VP8 and audio as Opus.
 
 ## Public Watch Page
 
