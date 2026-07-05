@@ -347,6 +347,9 @@ fn ensure_stream_key(kind: SourceKind) -> SourceKind {
         SourceKind::Rtmp { stream_key } if stream_key.is_empty() => SourceKind::Rtmp {
             stream_key: generate_stream_key(),
         },
+        SourceKind::WebRtc { token } if token.is_empty() => SourceKind::WebRtc {
+            token: generate_stream_key(),
+        },
         other => other,
     }
 }

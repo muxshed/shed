@@ -200,7 +200,9 @@ pub fn build_router(
         .route("/public/channel/{token}/{segment}", get(channel::serve_segment))
         // Public guest join (token-scoped — no auth)
         .route("/guest/{token}", get(guests::public_info))
-        .route("/guest/{token}/whip", post(guests::whip));
+        .route("/guest/{token}/whip", post(guests::whip))
+        .route("/whip", post(whip::publish))
+        .route("/whip/{session}", delete(whip::teardown));
 
     // Privileged management group, only mounted when a management token is set.
     // Gated by management_auth (X-Management-Token), separate from tenant keys.
