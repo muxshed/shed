@@ -143,6 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         source_normalizers: RwLock::new(std::collections::HashMap::new()),
         srt_listeners: RwLock::new(std::collections::HashMap::new()),
         guest_peers: RwLock::new(std::collections::HashMap::new()),
+        whip_sessions: RwLock::new(std::collections::HashMap::new()),
         scene_compositors: RwLock::new(std::collections::HashMap::new()),
         browser_sources: RwLock::new(std::collections::HashMap::new()),
         program_tx,
