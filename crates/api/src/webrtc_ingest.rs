@@ -265,8 +265,22 @@ fn forward_track(
         let kind_label = if is_video { "video" } else { "audio" };
 
         if is_video {
-            // Determine the negotiated video codec, then start ffmpeg once.
+            let addr = format!("127.0.0.1:{}", video_port);
+
+            // Read the first RTP packet BEFORE inspecting the codec: webrtc-rs only
+            // populates `track.codec()` once a packet has been read, so reading it
+            // earlier returns an empty mime and would mis-detect H.264 as VP8.
+            let first = match track.read_rtp().await {
+                Ok((packet, _)) => packet,
+                Err(_) => {
+                    tracing::info!("ingest {}: video track ended before first packet", source_id);
+                    return;
+                }
+            };
             let codec = VideoCodec::from_mime(&track.codec().capability.mime_type);
+            let pt = codec.payload_type();
+
+            // Start ffmpeg once, now that the negotiated codec is known.
             if ffmpeg_started
                 .compare_exchange(
                     false,
@@ -307,10 +321,10 @@ fn forward_track(
                 }
             });
 
-            let pt = codec.payload_type();
-            let addr = format!("127.0.0.1:{}", video_port);
+            // Forward the first packet we already read, then the rest.
             let mut n: u64 = 0;
-            while let Ok((mut packet, _)) = track.read_rtp().await {
+            let mut packet = first;
+            loop {
                 packet.header.payload_type = pt;
                 if let Ok(raw) = packet.marshal() {
                     if fwd.send_to(&raw, &addr).await.is_err() {
@@ -318,6 +332,10 @@ fn forward_track(
                     }
                 }
                 n += 1;
+                match track.read_rtp().await {
+                    Ok((p, _)) => packet = p,
+                    Err(_) => break,
+                }
             }
             tracing::info!("ingest {}: video track ended after {} packets", source_id, n);
         } else {
@@ -509,7 +527,14 @@ async fn start_ffmpeg(
     }
 
     {
+        // Register the ffmpeg child while holding the normalizers lock, and only
+        // if the peer is still present. `stop_ingest` removes the child and the
+        // peer under this same lock, so this closes the race where a peer that
+        // drops during lazy startup could leave an unreaped ffmpeg child.
         let mut normalizers = state.source_normalizers.write().await;
+        if !state.guest_peers.read().await.contains_key(&source_id) {
+            return Err("peer torn down before ffmpeg start".to_string());
+        }
         if let Some(mut old) = normalizers.remove(&source_id) {
             let _ = old.kill().await;
         }
@@ -627,13 +652,16 @@ async fn read_flv_output(
 /// ephemeral source row and reset the guest record; a persistent source is kept.
 pub async fn stop_ingest(state: &AppState, source_id: &Uuid, kind: IngestKind) {
     {
+        // Hold the normalizers lock across the peer removal so a concurrent lazy
+        // ffmpeg start (which checks peer presence under this same lock) cannot
+        // register a child after we have already torn the peer down.
         let mut normalizers = state.source_normalizers.write().await;
         if let Some(mut child) = normalizers.remove(source_id) {
             let _ = child.kill().await;
         }
-    }
-    if let Some(pc) = state.guest_peers.write().await.remove(source_id) {
-        let _ = pc.close().await;
+        if let Some(pc) = state.guest_peers.write().await.remove(source_id) {
+            let _ = pc.close().await;
+        }
     }
     state.remove_media_relay(source_id).await;
     state.sequence_headers.write().await.remove(source_id);
