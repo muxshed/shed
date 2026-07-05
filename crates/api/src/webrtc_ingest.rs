@@ -651,18 +651,19 @@ async fn read_flv_output(
 /// sequence headers, mark the source Disconnected. For a guest, also delete the
 /// ephemeral source row and reset the guest record; a persistent source is kept.
 pub async fn stop_ingest(state: &AppState, source_id: &Uuid, kind: IngestKind) {
-    {
-        // Hold the normalizers lock across the peer removal so a concurrent lazy
-        // ffmpeg start (which checks peer presence under this same lock) cannot
-        // register a child after we have already torn the peer down.
+    // Remove the ffmpeg child and the peer under one lock (paired with the
+    // peer-presence check in start_ffmpeg, so a concurrent lazy start cannot
+    // leak a child). Close the peer AFTER releasing the lock and off this task:
+    // this also runs from the peer-state-change callback, and awaiting
+    // pc.close() inline there blocks on the very callback that is running, which
+    // would leave the source stuck Live. Setting Disconnected must not wait on it.
+    let peer = {
         let mut normalizers = state.source_normalizers.write().await;
         if let Some(mut child) = normalizers.remove(source_id) {
             let _ = child.kill().await;
         }
-        if let Some(pc) = state.guest_peers.write().await.remove(source_id) {
-            let _ = pc.close().await;
-        }
-    }
+        state.guest_peers.write().await.remove(source_id)
+    };
     state.remove_media_relay(source_id).await;
     state.sequence_headers.write().await.remove(source_id);
     state
@@ -691,6 +692,14 @@ pub async fn stop_ingest(state: &AppState, source_id: &Uuid, kind: IngestKind) {
 
     let data_dir = state.config.read().await.data_dir.clone();
     let _ = tokio::fs::remove_file(data_dir.join(format!("ingest-{}.sdp", source_id))).await;
+
+    // Close the peer last, off this task, so a callback-context caller does not
+    // block on its own close.
+    if let Some(pc) = peer {
+        tokio::spawn(async move {
+            let _ = pc.close().await;
+        });
+    }
 }
 
 async fn load_output_config(state: &AppState) -> OutputConfig {
