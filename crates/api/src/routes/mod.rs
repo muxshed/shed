@@ -22,6 +22,7 @@ mod stingers;
 pub mod stream;
 mod switching;
 pub mod webrtc_config;
+pub mod whip;
 mod ws;
 
 use crate::auth::auth_middleware;
