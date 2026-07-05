@@ -987,6 +987,53 @@ async fn test_whip_rejects_guest_token() {
 }
 
 #[tokio::test]
+async fn test_startup_keeps_whip_sources_removes_guest_orphans() {
+    // A persistent WHIP source (web_rtc, no guest link) must survive a restart;
+    // a guest-linked ephemeral source (same kind) must be cleaned. This locks in
+    // the fix for the startup cleanup that used to delete every web_rtc source.
+    let (_app, _key, state) = setup().await;
+
+    let whip = uuid::Uuid::new_v4();
+    sqlx::query("INSERT INTO sources (id, name, kind) VALUES (?, ?, ?)")
+        .bind(whip.to_string())
+        .bind("Cam")
+        .bind(r#"{"type":"web_rtc","token":"keepme"}"#)
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    let guest = uuid::Uuid::new_v4();
+    let guest_src = uuid::Uuid::new_v4();
+    sqlx::query("INSERT INTO sources (id, name, kind) VALUES (?, ?, ?)")
+        .bind(guest_src.to_string())
+        .bind("Bob (guest)")
+        .bind(r#"{"type":"web_rtc","token":"guesttok"}"#)
+        .execute(&state.db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO guests (id, name, token, source_id) VALUES (?, ?, ?, ?)")
+        .bind(guest.to_string())
+        .bind("Bob")
+        .bind("guesttok")
+        .bind(guest_src.to_string())
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    muxshed_api::startup::cleanup_orphan_guest_sources(&state.db).await;
+
+    let ids: Vec<String> = sqlx::query_as::<_, (String,)>("SELECT id FROM sources")
+        .fetch_all(&state.db)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(i,)| i)
+        .collect();
+    assert!(ids.contains(&whip.to_string()), "persistent WHIP source must survive restart");
+    assert!(!ids.contains(&guest_src.to_string()), "guest ephemeral source must be removed");
+}
+
+#[tokio::test]
 async fn test_whip_teardown_unknown_session_is_noop() {
     let (app, _key, _state) = setup().await;
     let req = Request::builder()

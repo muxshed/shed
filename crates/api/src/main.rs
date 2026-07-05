@@ -63,14 +63,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     run_migrations(&db).await?;
 
-    // Guests are ephemeral (peers live in memory). Any web_rtc source or
-    // connected guest record left in the DB is an orphan from a previous run.
-    let _ = sqlx::query("DELETE FROM sources WHERE kind LIKE '%\"web_rtc\"%'")
-        .execute(&db)
-        .await;
-    let _ = sqlx::query("UPDATE guests SET status = 'invited', source_id = NULL WHERE source_id IS NOT NULL")
-        .execute(&db)
-        .await;
+    // Clean up orphan guest sources from a previous run. Persistent WHIP ingest
+    // sources use the same web_rtc kind but are not guest-linked, so they survive.
+    muxshed_api::startup::cleanup_orphan_guest_sources(&db).await;
 
     // Headless bootstrap: seed the env-provided admin API key (idempotent) so an
     // operator has a working credential without the web setup wizard.

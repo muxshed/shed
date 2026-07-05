@@ -134,6 +134,16 @@ pub async fn start_ingest(
     offer_sdp: String,
     kind: IngestKind,
 ) -> Result<String, String> {
+    // Log the publisher's offered video codecs so codec-negotiation failures are
+    // diagnosable — e.g. exactly which H.264 profile-level-id an encoder like OBS
+    // is sending when the video track is rejected as "codec not found".
+    for line in offer_sdp.lines() {
+        let u = line.to_ascii_uppercase();
+        if u.contains("H264") || u.contains("H265") || u.contains("HEVC") || line.contains("profile-level-id") {
+            tracing::info!("ingest {}: offer codec: {}", source_id, line.trim());
+        }
+    }
+
     let (video_port, audio_port) = alloc_ports().await?;
 
     let pc = build_peer(&state).await?;
@@ -379,10 +389,17 @@ async fn build_peer(state: &AppState) -> Result<Arc<RTCPeerConnection>, String> 
     // Chrome, Firefox, Safari, and OBS. Whatever profile is negotiated, the pump
     // reads the track's mime as H.264 and forwards it the same way.
     for (pt, fmtp) in [
+        // Constrained Baseline (browsers, most encoders)
         (102u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"),
         (127u8, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f"),
         (125u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"),
         (108u8, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f"),
+        // Main (some hardware encoders)
+        (124u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d001f"),
+        (118u8, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=4d001f"),
+        // Constrained High and High (OBS / Apple VideoToolbox)
+        (120u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c1f"),
+        (121u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64001f"),
         (123u8, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032"),
     ] {
         m.register_codec(
