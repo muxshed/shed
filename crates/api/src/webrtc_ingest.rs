@@ -693,6 +693,14 @@ pub async fn stop_ingest(state: &AppState, source_id: &Uuid, kind: IngestKind) {
     let data_dir = state.config.read().await.data_dir.clone();
     let _ = tokio::fs::remove_file(data_dir.join(format!("ingest-{}.sdp", source_id))).await;
 
+    // Drop any WHIP session pointing at this source so the map does not grow on
+    // callback/watchdog teardown paths that never hit DELETE.
+    state
+        .whip_sessions
+        .write()
+        .await
+        .retain(|_, sid| sid != source_id);
+
     // Close the peer last, off this task, so a callback-context caller does not
     // block on its own close.
     if let Some(pc) = peer {

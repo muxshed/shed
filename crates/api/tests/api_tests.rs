@@ -950,6 +950,42 @@ async fn test_whip_conflict_when_already_live() {
 }
 
 #[tokio::test]
+async fn test_whip_rejects_guest_token() {
+    // A guest's ephemeral source uses SourceKind::WebRtc with the guest's token,
+    // but /whip must not accept it (guests publish via /guest/{token}/whip). If it
+    // did, teardown would run as Persistent and leak the guest row.
+    let (app, _key, state) = setup().await;
+
+    let sid = uuid::Uuid::new_v4();
+    let token = "guest_token_abcdef12";
+    let kind = format!(r#"{{"type":"web_rtc","token":"{}"}}"#, token);
+    sqlx::query("INSERT INTO sources (id, name, kind) VALUES (?, ?, ?)")
+        .bind(sid.to_string())
+        .bind("Bob (guest)")
+        .bind(&kind)
+        .execute(&state.db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO guests (id, name, token, source_id) VALUES (?, ?, ?, ?)")
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind("Bob")
+        .bind(token)
+        .bind(sid.to_string())
+        .execute(&state.db)
+        .await
+        .unwrap();
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/whip")
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from("v=0\r\n"))
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn test_whip_teardown_unknown_session_is_noop() {
     let (app, _key, _state) = setup().await;
     let req = Request::builder()

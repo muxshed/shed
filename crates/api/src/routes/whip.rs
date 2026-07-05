@@ -43,12 +43,29 @@ async fn resolve_source(state: &AppState, token: &str) -> Result<Uuid, StatusCod
     // a LIKE match inside another field).
     let kind: muxshed_common::SourceKind =
         serde_json::from_str(&kind_json).map_err(|_| StatusCode::UNAUTHORIZED)?;
-    match kind {
-        muxshed_common::SourceKind::WebRtc { token: t } if t == token => {
-            Uuid::parse_str(&id).map_err(|_| StatusCode::UNAUTHORIZED)
-        }
-        _ => Err(StatusCode::UNAUTHORIZED),
+    let token_matches = matches!(
+        &kind,
+        muxshed_common::SourceKind::WebRtc { token: t } if t == token
+    );
+    if !token_matches {
+        return Err(StatusCode::UNAUTHORIZED);
     }
+
+    // Refuse guest ephemeral sources: /whip is only for persistent WHIP sources.
+    // A guest publishes through /guest/{token}/whip and its source row is tied to
+    // a `guests` record; accepting it here and tearing it down as a persistent
+    // source would leak the guest's row and status. Guests are excluded by their
+    // link to the guests table.
+    let is_guest: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM guests WHERE source_id = ?")
+        .bind(&id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    if is_guest.is_some() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    Uuid::parse_str(&id).map_err(|_| StatusCode::UNAUTHORIZED)
 }
 
 /// `POST /api/v1/whip` — publish. Body is the SDP offer.
