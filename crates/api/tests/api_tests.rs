@@ -625,9 +625,9 @@ async fn test_guest_public_info() {
     let info = response_json(resp).await;
     assert_eq!(info["name"], "Sam");
     assert_eq!(info["status"], "invited");
-    // The join page receives ICE servers matching the server peer.
+    // The join page receives the configured ICE servers (empty by default; the
+    // browser falls back to its own STUN for remote guests).
     assert!(info["ice_servers"].is_array());
-    assert!(!info["ice_servers"].as_array().unwrap().is_empty());
 
     // Unknown token → 404.
     let req = Request::builder()
@@ -670,7 +670,8 @@ async fn test_guest_whip_malformed_offer() {
 async fn test_webrtc_config_default_and_update() {
     let (app, key, _s) = setup().await;
 
-    // Default config exposes at least one (STUN) ICE server.
+    // Default config has no ICE servers, so LAN and offline installs have no
+    // external dependency. STUN/TURN are opt-in.
     let resp = app
         .clone()
         .oneshot(json_request("GET", "/api/v1/webrtc/config", &key, None))
@@ -678,7 +679,7 @@ async fn test_webrtc_config_default_and_update() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let cfg = response_json(resp).await;
-    assert!(!cfg["ice_servers"].as_array().unwrap().is_empty());
+    assert!(cfg["ice_servers"].as_array().unwrap().is_empty());
 
     // Add a TURN server and read it back.
     let body = r#"{"ice_servers":[{"urls":["stun:stun.l.google.com:19302"]},{"urls":["turn:turn.example.com:3478"],"username":"u","credential":"p"}]}"#;
