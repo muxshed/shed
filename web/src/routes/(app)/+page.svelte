@@ -599,10 +599,10 @@
 					{#if liveStreamSources().length === 0}
 						<p class="text-amber-muted">No live sources. Connect OBS to start.</p>
 					{:else}
-						<div class="grid gap-3" style="grid-template-columns: repeat({Math.min(liveStreamSources().length, 3)}, minmax(0, 1fr))">
+						<div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr))">
 							{#each liveStreamSources() as source (source.id)}
 								<div
-									class="rounded-sm border p-2 transition-colors {source.id === programSourceId
+									class="rounded-sm border p-1.5 transition-colors {source.id === programSourceId
 										? 'border-danger bg-panel-raised'
 										: source.id === previewSourceId
 											? 'border-live bg-panel-raised'
@@ -613,18 +613,18 @@
 										label={source.name}
 										active={source.id === programSourceId}
 									/>
-									<div class="mt-2 flex gap-2">
+									<div class="mt-1.5 flex gap-1.5">
 										<button
 											onclick={() => { previewSourceId = source.id; }}
 											disabled={source.id === programSourceId}
-											class="btn flex-1 {source.id === previewSourceId ? 'btn--go' : ''}"
+											class="btn flex-1 px-2 py-1 text-[10px] {source.id === previewSourceId ? 'btn--go' : ''}"
 										>
 											Next Up
 										</button>
 										<button
 											onclick={() => cutToSource(source.id)}
 											disabled={source.id === programSourceId}
-											class="btn btn--danger flex-1"
+											class="btn btn--danger flex-1 px-2 py-1 text-[10px]"
 										>
 											Switch
 										</button>
