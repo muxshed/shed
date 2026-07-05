@@ -24,24 +24,17 @@ pub struct IceServer {
     pub credential: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The default is no ICE servers. The primary self-host case is an encoder on
+/// the same LAN as the server, which connects with host candidates alone, so an
+/// empty default keeps offline and air-gapped installs working with no external
+/// dependency. Add STUN or TURN under the WebRTC settings to publish or guest
+/// across NAT.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct WebrtcConfig {
     pub ice_servers: Vec<IceServer>,
 }
 
-impl Default for WebrtcConfig {
-    fn default() -> Self {
-        Self {
-            ice_servers: vec![IceServer {
-                urls: vec!["stun:stun.l.google.com:19302".to_string()],
-                username: None,
-                credential: None,
-            }],
-        }
-    }
-}
-
-/// Load the configured ICE servers, falling back to the STUN default.
+/// Load the configured ICE servers, falling back to an empty (host-candidate) set.
 pub async fn load(state: &AppState) -> WebrtcConfig {
     sqlx::query_as::<_, (String,)>("SELECT value FROM settings WHERE key = 'webrtc_config'")
         .fetch_optional(&state.db)
