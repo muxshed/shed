@@ -954,7 +954,7 @@ async fn test_whip_teardown_unknown_session_is_noop() {
     let (app, _key, _state) = setup().await;
     let req = Request::builder()
         .method("DELETE")
-        .uri(&format!("/api/v1/whip/{}", uuid::Uuid::new_v4()))
+        .uri(format!("/api/v1/whip/{}", uuid::Uuid::new_v4()))
         .body(Body::empty())
         .unwrap();
     let resp = app.oneshot(req).await.unwrap();
