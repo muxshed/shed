@@ -21,7 +21,7 @@
 		"svelte-check": "^4.4.6",
 		"tailwindcss": "^4.2.2",
 		"typescript": "^6.0.2",
-		"vite": "^8.0.7"
+		"vite": "^8.2.1"
 	},
 	"dependencies": {
 		"@fontsource/jetbrains-mono": "^5.2.8",
