@@ -8,7 +8,7 @@ FROM lukemathwalker/cargo-chef:latest-rust-1.88 AS chef
 WORKDIR /build
 
 FROM chef AS planner
-COPY Cargo.toml Cargo.toml
+COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     CARGO_PROFILE_RELEASE_LTO=false \
     cargo chef cook --release --recipe-path recipe.json
 
-COPY Cargo.toml Cargo.toml
+COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY migrations/ migrations/
 
