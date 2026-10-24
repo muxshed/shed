@@ -5,6 +5,7 @@ use muxshed_common::{Destination, MuxshedError, PipelineState, RecordingState};
 use std::path::Path;
 use uuid::Uuid;
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait PipelineController: Send + Sync {
     async fn start(&self, destinations: Vec<Destination>) -> Result<(), MuxshedError>;
