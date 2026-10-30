@@ -10,6 +10,7 @@ export interface Instance {
 
 export type SourceKind =
 	| { type: 'rtmp'; stream_key: string }
+	| { type: 'rtsp'; url: string }
 	| { type: 'srt'; port: number; passphrase?: string }
 	| { type: 'browser'; url: string }
 	| { type: 'web_rtc'; token: string }

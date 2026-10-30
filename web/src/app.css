@@ -1,42 +1,43 @@
 @import 'tailwindcss';
 
-/* Muxshed "Amber Rack" design system — see /DESIGN.md (single source of truth). */
+/* Muxshed modern broadcast themes. The legacy amber token names remain aliases so
+   all existing pages retain their correct styling without a component rewrite. */
 /* Fonts (JetBrains Mono + DSEG7) are bundled locally and imported in the root
    +layout.svelte so the UI works fully offline — no CDN dependency. */
 
 @theme {
-  --color-bg: #120D07;
-  --color-panel: #160F08;
-  --color-panel-raised: #1B140A;
-  --color-well: #0A0A0A;
-  --color-border: #4A3717;
-  --color-border-dim: #3A2C13;
+  --color-bg: #0B1220;
+  --color-panel: #111C2B;
+  --color-panel-raised: #192637;
+  --color-well: #08111E;
+  --color-border: #31445B;
+  --color-border-dim: #26384A;
 
-  --color-amber: #FFB000;
-  --color-amber-bright: #FFD479;
-  --color-amber-dim: #C8861F;
-  --color-amber-muted: #7A5A1E;
+  --color-amber: #58C7EC;
+  --color-amber-bright: #EDF7FE;
+  --color-amber-dim: #B4C7D8;
+  --color-amber-muted: #7B93A8;
 
   --color-live: #3CA643;
   --color-live-glow: #46E06A;
-  --color-warning: #F2E96D;
+  --color-warning: #FFC76F;
   --color-danger: #EF4444;
   --color-danger-glow: #FF5A4D;
 
-  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-mono: 'Segoe UI', Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-led: 'DSEG7 Classic', 'JetBrains Mono', monospace;
 
-  --radius-sm: 2px;
-  --radius-md: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
 }
 
 @layer base {
   :root {
     color-scheme: dark;
-    --glow-amber: 0 0 6px rgba(255, 176, 0, 0.5);
+    --glow-amber: 0 0 0 2px rgba(88, 199, 236, 0.14);
     --glow-live: 0 0 6px rgba(70, 224, 106, 0.4);
     --glow-danger: 0 0 6px rgba(255, 90, 77, 0.45);
-    --scanlines: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
+    --scanlines: none;
   }
 
   :root[data-fx='off'] {
@@ -57,12 +58,12 @@
     background-image: var(--scanlines);
     color: var(--color-amber-dim);
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: 14px;
     -webkit-font-smoothing: antialiased;
   }
 
   ::selection {
-    background: rgba(255, 176, 0, 0.25);
+    background: rgba(88, 199, 236, 0.22);
     color: var(--color-amber-bright);
   }
 
@@ -70,7 +71,7 @@
     color: var(--color-amber-muted);
   }
 
-  /* Amber scrollbars */
+  /* Theme-aware scrollbars */
   * {
     scrollbar-color: var(--color-border) transparent;
   }
@@ -95,7 +96,7 @@
     border-bottom: 1px solid var(--color-border-dim);
     font-size: 11px;
     font-weight: 500;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     text-transform: uppercase;
     color: var(--color-amber-dim);
   }
@@ -115,8 +116,8 @@
     font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 500;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    letter-spacing: 0.35px;
+    text-transform: none;
     background: transparent;
     border: 1px solid var(--color-amber);
     border-radius: var(--radius-sm);
@@ -312,4 +313,129 @@
     text-transform: uppercase;
     color: var(--color-amber-dim);
   }
+}
+
+/* Modern selectable themes, stored per browser (no backend or stream restart). */
+:root[data-theme='graphite'] {
+  color-scheme: dark;
+  --color-bg: #101318;
+  --color-panel: #1A2029;
+  --color-panel-raised: #252C36;
+  --color-well: #0C1016;
+  --color-border: #425063;
+  --color-border-dim: #344051;
+  --color-amber: #A2BEF7;
+  --color-amber-bright: #F1F5FC;
+  --color-amber-dim: #C7D2E2;
+  --color-amber-muted: #8797AC;
+  --glow-amber: 0 0 0 2px rgba(162, 190, 247, 0.12);
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+  --color-bg: #F1F5F9;
+  --color-panel: #FFFFFF;
+  --color-panel-raised: #E7EEF6;
+  --color-well: #FFFFFF;
+  --color-border: #A9BAD0;
+  --color-border-dim: #D1DBE8;
+  --color-amber: #075D9B;
+  --color-amber-bright: #14233B;
+  --color-amber-dim: #354A65;
+  --color-amber-muted: #586D83;
+  --glow-amber: 0 0 0 2px rgba(7, 93, 155, 0.15);
+}
+:root[data-theme='light'] .btn--go {
+  background: #E2F7EA;
+  border-color: #218248;
+  color: #155D33;
+}
+:root[data-theme='light'] .btn--danger {
+  background: #FFECEC;
+  border-color: #B64040;
+  color: #922B2B;
+}
+:root[data-theme='light'] .pill--live {
+  background: #E1F6E8;
+  border-color: #32804A;
+  color: #175A2D;
+  text-shadow: none;
+}
+:root[data-theme='light'] .pill--warning {
+  background: #FFF5DD;
+  border-color: #C08D21;
+  color: #825B0C;
+}
+:root[data-theme='light'] .pill--rec {
+  background: #FFEBEB;
+  border-color: #C24B4B;
+  color: #902B2B;
+}
+/* Keyboard and touch usability */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: 2px;
+}
+@media (max-width: 767px) {
+  .panel__head { letter-spacing: 0.6px; }
+  .btn { min-height: 38px; }
+  .rack-item { white-space: nowrap; border-left: none; border-bottom: 2px solid transparent; }
+  .rack-item--active { border-bottom-color: var(--color-amber); }
+}
+
+/* OBS-inspired workspace: compact neutral charcoal, sidebar preserved. */
+:root[data-theme='obs'] {
+  color-scheme: dark;
+  --color-bg: #111316;
+  --color-panel: #202329;
+  --color-panel-raised: #2b2f36;
+  --color-well: #101216;
+  --color-border: #414650;
+  --color-border-dim: #343941;
+  --color-amber: #9ab9e8;
+  --color-amber-bright: #f4f6f9;
+  --color-amber-dim: #c0c7d1;
+  --color-amber-muted: #89939f;
+  --color-live: #238b56;
+  --color-live-glow: #53d391;
+  --color-warning: #f1c05b;
+  --color-danger: #d9404a;
+  --color-danger-glow: #f46b74;
+  --glow-amber: none;
+  --glow-live: none;
+  --glow-danger: none;
+  --scanlines: none;
+  --radius-sm: 4px;
+  --radius-md: 5px;
+}
+:root[data-theme='obs'] .panel { box-shadow: none; }
+:root[data-theme='obs'] .panel__head {
+  min-height: 30px;
+  font-size: 11px;
+  letter-spacing: .3px;
+  text-transform: none;
+  padding: 5px 10px;
+  font-weight: 650;
+}
+:root[data-theme='obs'] .panel__body { padding: 10px; }
+:root[data-theme='obs'] .btn {
+  font-size: 12px;
+  min-height: 29px;
+  padding: 5px 10px;
+  letter-spacing: 0;
+}
+:root[data-theme='obs'] .btn--go { background: #174f34; border-color: #30895d; color: #a9f4c9; }
+:root[data-theme='obs'] .btn--danger { background: #512329; border-color: #b74352; color: #ffb9bc; }
+:root[data-theme='obs'] .rack-item { padding: 8px 12px; letter-spacing: 0; }
+:root[data-theme='obs'] .rack-item--active { border-left-color: #6f9cdb; }
+:root[data-theme='obs'] .led { font-family: 'JetBrains Mono',monospace; font-size: 12px; letter-spacing: .3px; text-shadow: none; }
+:root[data-theme='obs'] .pill { letter-spacing: 0; }
+:root[data-theme='obs'] .scanlines-well { background: #0b0c0f; }
+.obs-monitor-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-bottom: 10px; }
+.obs-dock { margin-bottom: 10px; }
+.obs-automation-link { color:var(--color-amber); font-size: 12px; text-decoration:underline; text-underline-offset:3px; }
+@media (max-width: 850px) { .obs-monitor-grid { grid-template-columns:1fr; } }
+@media (max-width: 767px) {
+  :root[data-theme='obs'] .panel__body { padding: 9px; }
+  :root[data-theme='obs'] .btn { min-height: 38px; }
+  .obs-monitor-grid { gap: 8px; }
 }

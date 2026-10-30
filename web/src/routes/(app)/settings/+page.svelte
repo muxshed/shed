@@ -32,8 +32,32 @@
 		offline_grace_ms: 3000,
 		recovery_grace_ms: 3000,
 	});
-	let sources = $state<Source[]>([]);
+	let sources = $state<Array<{id: string; name: string}>>([]);
 	let failoverSaving = $state(false);
+
+	// Local FFmpeg health (does not confirm remote YouTube ingest).
+	let reliability = $state<Awaited<ReturnType<typeof api.getReliability>> | null>(null);
+	let reliabilityLoading = $state(false);
+	let watchdogSaving = $state(false);
+	async function refreshReliability() {
+		reliabilityLoading = true;
+		try { reliability = await api.getReliability(); }
+		catch (e) { notify.error(e); }
+		finally { reliabilityLoading = false; }
+	}
+	async function saveWatchdog(enabled: boolean) {
+		if (!reliability) return;
+		if (enabled && !confirm('Automatic recovery will reconnect YouTube if every FFmpeg output stalls. Enable only after testing off-air. Continue?')) return;
+		watchdogSaving = true;
+		try {
+			const config = await api.setReliabilityWatchdog({
+				...reliability.watchdog, automatic_restart: enabled,
+			});
+			reliability.watchdog = config;
+			notify.success(enabled ? 'Encoder auto-recovery enabled' : 'Monitor-only mode enabled');
+		} catch (e) { notify.error(e); }
+		finally { watchdogSaving = false; }
+	}
 
 	// System timezone
 	let systemTz = $state('UTC');
@@ -42,8 +66,9 @@
 	onMount(async () => {
 		fxOff = localStorage.getItem('muxshed-fx') === 'off';
 		await refreshUsers();
+		await refreshReliability();
 		try {
-			[failover, sources] = await Promise.all([api.getFailover(), api.listSources()]);
+			[failover, sources] = await Promise.all([api.getFailover(), api.listFailoverSources()]);
 			systemTz = (await api.getTimezone()).timezone;
 		} catch (e) {
 			notify.error(e);
@@ -282,6 +307,39 @@
 				<p><span class="text-amber">Write</span> — Stream control: go live, switch sources, manage destinations</p>
 				<p><span class="text-amber">Read</span> — View only: monitor studio, see stats</p>
 			</div>
+		</div>
+	</section>
+
+	<!-- Local broadcast reliability, safe monitoring by default -->
+	<section class="panel">
+		<header class="panel__head">▮ Broadcast Reliability</header>
+		<div class="panel__body space-y-3">
+			<p class="text-xs text-amber-dim">Tracks Muxshed FFmpeg encoder processes and media delivery into the encoder. Remote YouTube health requires a separate integration.</p>
+			{#if reliability}
+				<div class="grid grid-cols-2 gap-3 text-xs">
+					<div><span class="field-label">Broadcast</span><p>{reliability.broadcasting ? 'LIVE' : 'OFF AIR'}</p></div>
+					<div><span class="field-label">Standby failover</span><p>{reliability.failover_active ? 'ACTIVE' : reliability.failover_configured ? 'ARMED' : 'NOT SET'}</p></div>
+				</div>
+				{#each reliability.egress as output (output.destination_id)}
+					<div class="rounded-sm border border-border-dim p-2 text-xs">
+						<p class="text-amber">{output.destination_name}</p>
+						<p>{output.process_alive ? 'Encoder running' : 'Encoder stopped'} · {output.last_media_write_age_seconds === null ? 'No media sent yet' : `${output.last_media_write_age_seconds}s since last media sent`}</p>
+					</div>
+				{/each}
+				{#if reliability.egress.length === 0}
+					<p class="text-xs text-amber-dim">No external FFmpeg outputs running.</p>
+				{/if}
+				<div class="row">
+					<div>
+						<p class="text-amber">Automatic encoder restart</p>
+						<p class="text-xs text-amber-dim">Monitor-only by default. Restarts interrupt outbound RTMP sessions. Limited to 2 attempts per 30 minutes.</p>
+					</div>
+					<button class="btn {reliability.watchdog.automatic_restart ? 'btn--go' : ''}" disabled={watchdogSaving} onclick={() => saveWatchdog(!reliability!.watchdog.automatic_restart)}>
+						{reliability.watchdog.automatic_restart ? '● On' : '○ Off'}
+					</button>
+				</div>
+			{/if}
+			<button class="btn" disabled={reliabilityLoading} onclick={refreshReliability}>{reliabilityLoading ? 'Checking…' : 'Refresh encoder health'}</button>
 		</div>
 	</section>
 

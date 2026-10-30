@@ -2,9 +2,11 @@
 
 pub mod admin;
 mod assets;
+use crate::ads;
 mod audio;
 mod auth;
 pub mod failover;
+mod reliability;
 mod broadcast;
 pub mod channel;
 mod preview;
@@ -87,6 +89,12 @@ pub fn build_router(
             "/scenes/{scene_id}/layers/{layer_id}",
             put(scenes::update_layer).delete(scenes::delete_layer),
         )
+        // Full-screen commercial playout (server-managed, returns on EOF)
+        .route("/ads/status", get(ads::status))
+        .route("/ads/play", post(ads::play))
+        .route("/ads/stop", post(ads::stop))
+        .route("/ads/schedule", get(crate::ad_scheduler::get_schedule).put(crate::ad_scheduler::save_schedule))
+        .route("/ads/schedule/skip", post(crate::ad_scheduler::skip_next))
         // Assets
         .route("/assets", get(assets::list_assets))
         .route("/assets/{id}", get(assets::get_asset).put(assets::update_asset).delete(assets::delete_asset))
@@ -124,6 +132,16 @@ pub fn build_router(
         // Output config and stats
         .route("/output/config", get(output::get_config).put(output::set_config))
         .route("/failover", get(failover::get_config).put(failover::set_config))
+        .route("/failover/sources", get(failover::list_fallback_choices))
+        // Phase 4: authenticated local stream history & CSV exports.
+        .route("/history", get(crate::history::report))
+        .route("/history/settings", get(crate::history::settings).put(crate::history::save_settings))
+        .route("/history/events.csv", get(crate::history::export_events))
+        .route("/history/sessions.csv", get(crate::history::export_sessions))
+        .route("/reliability/status", get(reliability::status))
+        .route("/reliability/watchdog", get(reliability::get_watchdog).put(reliability::put_watchdog))
+        // Opt-in broadcast tools. Routes are protected by existing auth middleware.
+        .route("/automation", get(crate::broadcast_tools::get_status).put(crate::broadcast_tools::put_config))
         // Schedules
         .route("/schedules", get(schedules::list).post(schedules::create))
         .route("/schedules/{id}", put(schedules::update).delete(schedules::delete))

@@ -6,7 +6,7 @@ use muxshed_processor::PipelineController;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, watch, RwLock};
+use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use uuid::Uuid;
 
 use crate::channel_hls::ChannelHls;
@@ -22,8 +22,15 @@ pub struct AppState {
     pub sequence_headers: RwLock<HashMap<Uuid, SequenceHeaders>>,
     pub source_media_info: RwLock<HashMap<Uuid, SourceMediaInfo>>,
     pub media_players: RwLock<HashMap<Uuid, tokio::process::Child>>,
+    /// One active commercial at a time; managed on the server.
+    pub ad_session: Mutex<Option<crate::ads::AdSession>>,
+    /// Server-owned automatic commercial settings and countdown.
+    pub automatic_ads: Mutex<crate::ad_scheduler::AutomaticAdRuntime>,
+    pub automation: Mutex<crate::broadcast_tools::AutomationRuntime>,
     pub source_normalizers: RwLock<HashMap<Uuid, tokio::process::Child>>,
     pub srt_listeners: RwLock<HashMap<Uuid, tokio::process::Child>>,
+    /// Supervised RTSP camera workers (FFmpeg + reconnect loop).
+    pub rtsp_sources: RwLock<HashMap<Uuid, tokio::task::JoinHandle<()>>>,
     /// Live WebRTC guest peer connections, kept alive while the guest is connected
     pub guest_peers: RwLock<HashMap<Uuid, Arc<webrtc::peer_connection::RTCPeerConnection>>>,
     /// WHIP publish sessions: session id -> source id, for DELETE teardown.

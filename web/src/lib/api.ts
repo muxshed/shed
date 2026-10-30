@@ -62,7 +62,89 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 	return JSON.parse(text);
 }
 
+
+export type AutomaticAdSchedule = {
+    enabled: boolean;
+    interval_minutes: number;
+    asset_id: string | null;
+    playlist_ids: string[];
+    next_asset_id: string | null;
+    broadcasting: boolean;
+    next_ad_in_seconds: number | null;
+    skip_next: boolean;
+};
+
+export type HistoryEvent = {
+    id: number;
+    at_utc: string;
+    event_type: string;
+    subject: string | null;
+    detail: string | null;
+    duration_ms: number | null;
+};
+export type HistorySession = {
+    id: string;
+    started_at: string;
+    last_seen_at: string;
+    ended_at: string | null;
+    end_reason: string | null;
+};
+export type HistoryDaily = {
+    day: string;
+    samples: number;
+    broadcasting_samples: number;
+    encoder_observed_samples: number;
+    healthy_encoder_samples: number;
+};
+export type HistoryReport = {
+    days: number;
+    from_utc: string;
+    to_utc: string;
+    retention_days: number;
+    notice: string;
+    summary: {
+        sessions: number;
+        observed_broadcast_seconds: number;
+        camera_outages: number;
+        recoveries: number;
+        failover_events: number;
+        ad_starts: number;
+        ad_ends: number;
+        encoder_alerts: number;
+        encoder_observed_samples: number;
+        encoder_healthy_samples: number;
+        estimated_local_encoder_health_percent: number | null;
+    };
+    sessions: HistorySession[];
+    events: HistoryEvent[];
+    daily: HistoryDaily[];
+};
+
+/** Authenticated CSV export. A bare URL would not carry the current session. */
+export async function downloadHistoryCsv(kind: 'events' | 'sessions', days: number) {
+    const headers: Record<string, string> = {};
+    const token = getSessionToken();
+    const key = getApiKey();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    else if (key) headers['X-API-Key'] = key;
+    const response = await fetch(`/api/v1/history/${kind}.csv?days=${days}`, { headers });
+    if (!response.ok) throw new Error(`CSV export failed (${response.status})`);
+    const blob = await response.blob();
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = `muxshed-${kind}-${days}d.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 2000);
+}
+
 export const api = {
+    // Durable local history, protected by existing API authentication.
+    getHistory: (days: number) => request<HistoryReport>(`/history?days=${days}`),
+    getHistorySettings: () => request<{ retention_days: number }>('/history/settings'),
+    saveHistorySettings: (retention_days: number) => request<{ retention_days: number }>('/history/settings', { method: 'PUT', body: JSON.stringify({ retention_days }) }),
 	// Auth
 	login: (username: string, password: string) =>
 		request<{ token: string; username: string; role: string; expires_at: string }>('/auth/login', {
@@ -96,6 +178,12 @@ export const api = {
 			body: JSON.stringify(data),
 		}),
 	deleteUser: (id: string) => request<void>(`/users/${id}`, { method: 'DELETE' }),
+
+	// Opt-in weather, sponsor lower-third, scheduled camera rotation and in-app alerts
+	getAutomation: () => request<BroadcastAutomationStatus>('/automation'),
+	setAutomation: (config: BroadcastAutomationConfig) => request<BroadcastAutomationStatus>('/automation', {
+		method: 'PUT', body: JSON.stringify(config),
+	}),
 
 	// Sources
 	listSources: () => request<Source[]>('/sources'),
@@ -142,6 +230,20 @@ export const api = {
 	setOutputConfig: (config: OutputConfig) =>
 		request<OutputConfig>('/output/config', { method: 'PUT', body: JSON.stringify(config) }),
 
+	getReliability: () => request<{
+		broadcasting: boolean;
+		failover_active: boolean;
+		program_relay_present: boolean;
+		failover_configured: boolean;
+		watchdog: { automatic_restart: boolean; stale_after_seconds: number; cooldown_seconds: number };
+		egress: Array<{destination_id: string; destination_name: string; process_alive: boolean; running_for_seconds: number; last_media_write_age_seconds: number | null; media_started: boolean}>;
+		note: string;
+	}>('/reliability/status'),
+	setReliabilityWatchdog: (config: {automatic_restart: boolean; stale_after_seconds: number; cooldown_seconds: number}) =>
+		request<{automatic_restart: boolean; stale_after_seconds: number; cooldown_seconds: number}>('/reliability/watchdog', {
+			method: 'PUT', body: JSON.stringify(config),
+		}),
+	listFailoverSources: () => request<Array<{id: string; name: string}>>('/failover/sources'),
 	getFailover: () => request<FailoverConfig>('/failover'),
 	setFailover: (config: FailoverConfig) =>
 		request<FailoverConfig>('/failover', { method: 'PUT', body: JSON.stringify(config) }),
@@ -169,6 +271,15 @@ export const api = {
 			method: 'PUT',
 			body: JSON.stringify(config),
 		}),
+
+	// Full-screen video commercials (server restores the live camera on EOF)
+	getAdStatus: () => request<{ playing: boolean; asset_id: string | null; source_id: string | null; return_to: string | null }>('/ads/status'),
+	playAd: (assetId: string) => request<{ playing: boolean; asset_id: string | null; source_id: string | null; return_to: string | null }>('/ads/play', { method: 'POST', body: JSON.stringify({ asset_id: assetId }) }),
+	stopAd: () => request<void>('/ads/stop', { method: 'POST' }),
+	getAutomaticAds: () => request<AutomaticAdSchedule>('/ads/schedule'),
+	saveAutomaticAds: (settings: Pick<AutomaticAdSchedule, 'enabled' | 'interval_minutes' | 'asset_id' | 'playlist_ids'>) =>
+		request<AutomaticAdSchedule>('/ads/schedule', { method: 'PUT', body: JSON.stringify(settings) }),
+	skipNextAutomaticAd: () => request<AutomaticAdSchedule>('/ads/schedule/skip', { method: 'POST' }),
 
 	// Source switching
 	getProgram: () => request<{ program_source_id: string | null; preview_source_id: string | null }>('/program'),
@@ -379,4 +490,28 @@ export const api = {
 		request<void>(`/instances/${instanceId}/record/stop`, {
 			method: 'POST',
 		}),
+};
+
+export type BroadcastAutomationConfig = {
+ weather_enabled: boolean;
+ weather_city: string;
+ weather_latitude: number;
+ weather_longitude: number;
+ sponsor_enabled: boolean;
+ sponsor_text: string;
+ broadcast_overlay_enabled: boolean;
+ weather_popup_interval_minutes: number;
+ weather_popup_duration_seconds: number;
+ auto_switch_enabled: boolean;
+ switch_interval_minutes: number;
+ switch_source_ids: string[];
+ alerts_enabled: boolean;
+};
+export type BroadcastAutomationStatus = {
+ config: BroadcastAutomationConfig;
+ weather: { temperature_c: number; humidity_percent: number; wind_kmh: number; rainfall_mm: number; updated_at_utc: string } | null;
+ events: { at_utc: string; kind: string; message: string }[];
+ overlay_note: string;
+ weather_popup_active: boolean;
+ weather_popup_next_seconds: number | null;
 };

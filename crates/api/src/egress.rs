@@ -1,8 +1,10 @@
-// Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
+// Licensed under the GNU Affero General Public License v3.0 Ã¢â‚¬â€ see LICENSE.
 
 use bytes::Bytes;
 use muxshed_common::{Destination, DestinationKind, WsEvent};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -23,6 +25,8 @@ pub struct EgressManager {
     processes: Arc<Mutex<HashMap<Uuid, EgressProcess>>>,
     ws_tx: broadcast::Sender<WsEvent>,
     bytes_sent: Arc<std::sync::atomic::AtomicU64>,
+    /// Monotonic time shared with the FFmpeg stdin writers.
+    clock: Arc<Instant>,
     started_at: Arc<Mutex<Option<std::time::Instant>>>,
     /// The most recent start() params, so the egress can be cleanly restarted
     /// (e.g. on a program failover splice) with a fresh encoder.
@@ -32,7 +36,21 @@ pub struct EgressManager {
 struct EgressProcess {
     child: Child,
     destination_name: String,
+    started_ms: u64,
+    last_write_ms: Arc<AtomicU64>,
 }
+
+/// Local FFmpeg process health. This does not verify YouTube's ingest status.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EgressHealth {
+    pub destination_id: Uuid,
+    pub destination_name: String,
+    pub process_alive: bool,
+    pub running_for_seconds: u64,
+    pub last_media_write_age_seconds: Option<u64>,
+    pub media_started: bool,
+}
+
 
 impl EgressManager {
     pub fn new(ws_tx: broadcast::Sender<WsEvent>) -> Self {
@@ -40,6 +58,7 @@ impl EgressManager {
             processes: Arc::new(Mutex::new(HashMap::new())),
             ws_tx,
             bytes_sent: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            clock: Arc::new(Instant::now()),
             started_at: Arc::new(Mutex::new(None)),
             restart_params: Arc::new(Mutex::new(None)),
         }
@@ -47,7 +66,7 @@ impl EgressManager {
 
     /// Restart the egress with the params from the last start(), priming with the
     /// given source's sequence headers. Used when the program splices to a new
-    /// source (failover) — a fresh encoder produces a clean stream and reconnects
+    /// source (failover) Ã¢â‚¬â€ a fresh encoder produces a clean stream and reconnects
     /// the destination, instead of the running encoder choking on the splice.
     pub async fn restart(&self, seq_headers: Option<crate::state::SequenceHeaders>) {
         let params = self.restart_params.lock().await.clone();
@@ -102,7 +121,7 @@ impl EgressManager {
                 _ => continue,
             };
 
-            tracing::info!("starting egress to {} → {}", dest.name, rtmp_url);
+            tracing::info!("starting egress to {} (destination URL withheld)", dest.name);
 
             let mut args = vec![
                 "-hide_banner".to_string(),
@@ -126,11 +145,34 @@ impl EgressManager {
                 cfg.width, cfg.height, cfg.width, cfg.height
             );
 
+            // Two independent overlays share the existing NVIDIA encoder.
+            // The sponsor text remains visible. The weather textfile is blank
+            // except for the configured 15-second pop-up window. A live edit
+            // never restarts or reconnects YouTube; first enable requires the
+            // next planned encoder start, as with the earlier lower-third.
+            let vf = if std::path::Path::new("/tmp/muxshed-broadcast-overlay.enabled").exists() {
+                format!(
+                    concat!(
+                        "{},",
+                        "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:",
+                        "textfile=/tmp/muxshed-sponsor-overlay.txt:reload=1:expansion=none:",
+                        "fontcolor=white:fontsize=h/23:x=w-text_w-32:y=h-text_h-30:",
+                        "shadowcolor=black@0.80:shadowx=1:shadowy=2:",
+                        "box=1:boxcolor=0x142236@0.94:boxborderw=16,",
+                        "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:",
+                        "textfile=/tmp/muxshed-weather-popup.txt:reload=1:expansion=none:",
+                        "fontcolor=white:fontsize=h/22:line_spacing=8:x=28:y=h-text_h-h*0.125:",
+                        "shadowcolor=black@0.80:shadowx=1:shadowy=2:",
+                        "box=1:boxcolor=0x0d2a42@0.94:boxborderw=20"
+                    ),
+                    vf
+                )
+            } else { vf };
             args.extend([
                 "-vf".to_string(), vf,
-                "-c:v".to_string(), "libx264".to_string(),
-                "-preset".to_string(), "medium".to_string(),
-                "-tune".to_string(), "zerolatency".to_string(),
+                "-c:v".to_string(), "h264_nvenc".to_string(),
+                "-preset".to_string(), "p4".to_string(),
+                "-tune".to_string(), "ll".to_string(),
                 "-b:v".to_string(), format!("{}k", cfg.video_bitrate_kbps),
                 "-maxrate".to_string(), format!("{}k", cfg.video_bitrate_kbps),
                 "-bufsize".to_string(), format!("{}k", cfg.video_bitrate_kbps * 2),
@@ -169,7 +211,12 @@ impl EgressManager {
                     let reader = BufReader::new(stderr);
                     let mut lines = reader.lines();
                     while let Ok(Some(line)) = lines.next_line().await {
-                        tracing::info!("ffmpeg [{}]: {}", log_name, line);
+                        // FFmpeg errors often echo the complete RTMP URL and stream key.
+                        if line.contains("rtmp://") || line.contains("rtmps://") {
+                            tracing::info!("ffmpeg [{}]: [destination URL redacted]", log_name);
+                        } else {
+                            tracing::info!("ffmpeg [{}]: {}", log_name, line);
+                        }
                     }
                 });
             }
@@ -180,6 +227,10 @@ impl EgressManager {
             let mut rx = media_tx.subscribe();
             let bytes_counter = self.bytes_sent.clone();
             let seq_headers = sequence_headers.clone();
+            let last_write_ms = Arc::new(AtomicU64::new(0));
+            let writer_activity = last_write_ms.clone();
+            let writer_clock = self.clock.clone();
+            let started_ms = self.clock.elapsed().as_millis().min(u64::MAX as u128) as u64;
 
             tokio::spawn(async move {
                 let mut stdin = stdin;
@@ -194,27 +245,45 @@ impl EgressManager {
 
                 if let Some(ref seq) = seq_headers {
                     if let Some(ref video) = seq.video {
-                        let _ = stdin.write_all(video).await;
+                        let _ = stdin.write_all(&flv::rewrite_tag_timestamp(video, 0)).await;
                         bytes_written += video.len() as u64;
                     }
                     if let Some(ref audio) = seq.audio {
-                        let _ = stdin.write_all(audio).await;
+                        let _ = stdin.write_all(&flv::rewrite_tag_timestamp(audio, 0)).await;
                         bytes_written += audio.len() as u64;
-                    }
-                    // Prime with the last keyframe so a freshly (re)started encoder
-                    // can decode immediately instead of waiting for the next one.
-                    if let Some(ref keyframe) = seq.last_keyframe {
-                        let _ = stdin.write_all(keyframe).await;
-                        bytes_written += keyframe.len() as u64;
                     }
                 }
 
+                let mut first_live_ts: Option<u32> = None;
+                let mut started_on_keyframe = false;
                 loop {
                     match rx.recv().await {
                         Ok(data) => {
+                            // Start a new output only on a live H.264 keyframe.
+                            if !started_on_keyframe {
+                                let keyframe = data.len() > 12
+                                    && data[0] == 9
+                                    && (data[11] & 0xF0) == 0x10
+                                    && data[12] == 1;
+                                if !keyframe {
+                                    continue;
+                                }
+                                started_on_keyframe = true;
+                            }
                             let len = data.len();
-                            bytes_counter.fetch_add(len as u64, std::sync::atomic::Ordering::Relaxed);
-                            if let Err(e) = stdin.write_all(&data).await {
+                            let rebased = if let Some(ts) = flv::read_tag_timestamp(&data) {
+                                let is_media = data.len() > 12 && (data[0] == 8 || data[0] == 9);
+                                let is_config = is_media && data[12] == 0;
+                                let origin = if is_media && !is_config {
+                                    *first_live_ts.get_or_insert(ts)
+                                } else {
+                                    first_live_ts.unwrap_or(ts)
+                                };
+                                flv::rewrite_tag_timestamp(&data, ts.saturating_sub(origin))
+                            } else {
+                                data.clone()
+                            };
+                            if let Err(e) = stdin.write_all(&rebased).await {
                                 tracing::warn!("egress pipe broken for {} after {} bytes: {}", dest_name, bytes_written, e);
                                 let _ = ws_tx.send(WsEvent::DestinationState {
                                     id: dest_id,
@@ -222,6 +291,12 @@ impl EgressManager {
                                 });
                                 break;
                             }
+                            // Count media only after FFmpeg accepted the bytes.
+                            bytes_counter.fetch_add(len as u64, Ordering::Relaxed);
+                            writer_activity.store(
+                                writer_clock.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                                Ordering::Relaxed,
+                            );
                             bytes_written += len as u64;
                             if bytes_written < 1000 || bytes_written % 1_000_000 < (len as u64) {
                                 tracing::debug!("egress [{}]: {} bytes total", dest_name, bytes_written);
@@ -247,6 +322,8 @@ impl EgressManager {
             procs.insert(dest.id, EgressProcess {
                 child,
                 destination_name: dest.name.clone(),
+                started_ms,
+                last_write_ms,
             });
         }
 
@@ -263,6 +340,26 @@ impl EgressManager {
                 state: "disconnected".to_string(),
             });
         }
+    }
+
+    /// Inspect FFmpeg process liveness without touching its stream, source, or restart state.
+    pub async fn health(&self) -> Vec<EgressHealth> {
+        let now = self.clock.elapsed().as_millis().min(u64::MAX as u128) as u64;
+        let mut processes = self.processes.lock().await;
+        processes.iter_mut().map(|(id, process)| {
+            let process_alive = matches!(process.child.try_wait(), Ok(None));
+            let last = process.last_write_ms.load(Ordering::Relaxed);
+            EgressHealth {
+                destination_id: *id,
+                destination_name: process.destination_name.clone(),
+                process_alive,
+                running_for_seconds: now.saturating_sub(process.started_ms) / 1000,
+                last_media_write_age_seconds: if last == 0 { None } else {
+                    Some(now.saturating_sub(last) / 1000)
+                },
+                media_started: last != 0,
+            }
+        }).collect()
     }
 
     pub async fn is_running(&self) -> bool {

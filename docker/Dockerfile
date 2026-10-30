@@ -1,4 +1,4 @@
-# Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
+# Licensed under the GNU Affero General Public License v3.0 Ã¢â‚¬â€ see LICENSE.
 
 # syntax=docker/dockerfile:1.7
 
@@ -22,9 +22,9 @@ COPY --from=planner /build/recipe.json recipe.json
 # ~15-20min of compile time. Enable it here if you need GstPipelineController.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
-    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
-    CARGO_PROFILE_RELEASE_LTO=false \
+    --mount=type=cache,id=muxshed-target-fresh-20261030,target=/build/target \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 \
+    CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_OPT_LEVEL=1 CARGO_BUILD_JOBS=1 \
     cargo chef cook --release --recipe-path recipe.json
 
 COPY Cargo.toml Cargo.lock ./
@@ -32,11 +32,12 @@ COPY crates/ crates/
 COPY migrations/ migrations/
 
 ENV SQLX_OFFLINE=true
+ENV RUST_MIN_STACK=33554432
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
-    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
-    CARGO_PROFILE_RELEASE_LTO=false \
+    --mount=type=cache,id=muxshed-target-fresh-20261030,target=/build/target \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 \
+    CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_OPT_LEVEL=1 CARGO_BUILD_JOBS=1 \
     cargo build --release && \
     cp /build/target/release/muxshed-api /usr/local/bin/muxshed-api
 
@@ -55,6 +56,8 @@ FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    curl \
+    fonts-dejavu-core \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

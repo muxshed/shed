@@ -67,6 +67,11 @@ pub async fn create(
 ) -> Result<(StatusCode, Json<Source>), ApiError> {
     let id = Uuid::new_v4();
     let mut kind = ensure_stream_key(body.kind);
+    if let SourceKind::Rtsp { url } = &kind {
+        crate::rtsp::validate_rtsp_url(url)
+            .map_err(MuxshedError::BadRequest)?;
+    }
+
 
     // Auto-assign port for SRT sources
     if let SourceKind::Srt { port, .. } = &mut kind {
@@ -90,6 +95,12 @@ pub async fn create(
         let _ = crate::srt::start_srt_listener(
             state.clone(), id, *port, passphrase.as_deref(),
         ).await;
+    }
+
+    // Direct RTSP sources are persistent and reconnect automatically.
+    if let SourceKind::Rtsp { url } = &kind {
+        crate::rtsp::start_rtsp_source(state.clone(), id, url.clone())
+            .await.map_err(MuxshedError::Internal)?;
     }
 
     // Browser sources start rendering immediately (in the background — launching
@@ -166,10 +177,17 @@ pub async fn update(
         .await?
         .ok_or_else(|| MuxshedError::NotFound(format!("source {}", id)))?;
 
+    let previous_kind: SourceKind = serde_json::from_str(&existing.kind)
+        .unwrap_or(SourceKind::TestPattern);
     let name = body.name.unwrap_or(existing.name);
     let kind = body.kind.map(ensure_stream_key).unwrap_or_else(|| {
         serde_json::from_str(&existing.kind).unwrap_or(SourceKind::TestPattern)
     });
+    if let SourceKind::Rtsp { url } = &kind {
+        crate::rtsp::validate_rtsp_url(url)
+            .map_err(MuxshedError::BadRequest)?;
+    }
+
     let kind_json = serde_json::to_string(&kind)
         .map_err(|e| MuxshedError::Internal(e.to_string()))?;
 
@@ -179,6 +197,15 @@ pub async fn update(
         .bind(&id)
         .execute(&state.db)
         .await?;
+
+    let source_id = existing.id.parse::<Uuid>().unwrap_or_default();
+    if matches!(previous_kind, SourceKind::Rtsp { .. }) {
+        crate::rtsp::stop_rtsp_source(&state, &source_id).await;
+    }
+    if let SourceKind::Rtsp { url } = &kind {
+        crate::rtsp::start_rtsp_source(state.clone(), source_id, url.clone())
+            .await.map_err(MuxshedError::Internal)?;
+    }
 
     let source = Source {
         id: existing.id.parse().unwrap_or_default(),
@@ -216,6 +243,7 @@ pub async fn delete(
 
     // Tear down any running listener/player/guest peer for this source.
     if let Ok(uid) = id.parse::<Uuid>() {
+        crate::rtsp::stop_rtsp_source(&state, &uid).await;
         crate::srt::stop_srt_listener(&state, &uid).await;
         crate::media_player::stop_media_playback(&state, &uid).await;
         crate::guest_webrtc::stop_guest_ingest(&state, &uid).await;
