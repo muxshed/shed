@@ -26,10 +26,14 @@
 
 	// Effects toggle + live clock
 	let fxOff = $state(false);
+	let uiTheme = $state<'obs' | 'ocean' | 'graphite' | 'light'>('obs');
 	let now = $state(Date.now());
 
 	onMount(() => {
 		fxOff = localStorage.getItem('muxshed-fx') === 'off';
+		const savedTheme = localStorage.getItem('muxshed-ui-theme-v2');
+		uiTheme = savedTheme === 'graphite' || savedTheme === 'light' || savedTheme === 'ocean' ? savedTheme : 'obs';
+		applyTheme();
 		applyFx();
 		checkSetup();
 		const t = setInterval(() => (now = Date.now()), 1000);
@@ -38,6 +42,15 @@
 			disconnectWs();
 		};
 	});
+
+	function applyTheme() {
+		document.documentElement.dataset.theme = uiTheme;
+	}
+
+	function selectTheme() {
+		localStorage.setItem('muxshed-ui-theme-v2', uiTheme);
+		applyTheme();
+	}
 
 	function applyFx() {
 		document.documentElement.dataset.fx = fxOff ? 'off' : '';
@@ -144,6 +157,8 @@
 		{ href: '/sources', label: 'Sources' },
 		{ href: '/scenes', label: 'Scenes' },
 		{ href: '/schedules', label: 'Schedules' },
+		{ href: '/automation', label: 'Weather & Automation' },
+		{ href: '/history', label: 'History & Reports' },
 		{ href: '/library', label: 'Library' },
 		{ href: '/destinations', label: 'Destinations' },
 		{ href: '/guests', label: 'Guests' },
@@ -268,18 +283,25 @@
 {:else}
 	<div class="flex min-h-screen flex-col">
 		<!-- Status bar -->
-		<header class="flex items-center justify-between border-b border-border bg-panel-raised px-3" style="height:40px">
+		<header class="flex min-h-11 flex-wrap items-center justify-between gap-2 border-b border-border bg-panel-raised px-2 py-2 sm:px-3">
 			<div class="flex items-center gap-2 text-[13px]">
 				<span class="text-amber-bright tracking-widest">◉ MUXSHED</span>
 				<span class="text-amber-muted">/</span>
 				<span class="label">{crumb}</span>
 			</div>
-			<div class="flex items-center gap-3">
+			<div class="flex items-center gap-2 sm:gap-3">
+				<label for="muxshed-theme" class="sr-only">Color theme</label>
+				<select id="muxshed-theme" bind:value={uiTheme} onchange={selectTheme} class="select w-[94px] sm:w-[130px]" aria-label="Color theme">
+					<option value="obs">OBS Studio</option>
+					<option value="ocean">Ocean</option>
+					<option value="graphite">Graphite</option>
+					<option value="light">Light</option>
+				</select>
 				<span class="pill {statePill($pipelineState)}">
 					{$pipelineState.state === 'live' ? '● ON AIR' : `○ ${stateLabel($pipelineState)}`}
 				</span>
 				{#if $pipelineState.state === 'live'}
-					<span class="led text-[18px]">{elapsed}</span>
+					<span class="led hidden text-[18px] sm:inline">{elapsed}</span>
 				{/if}
 				<button class="btn btn--icon" onclick={toggleFx} title="Toggle screen effects" aria-label="Toggle screen effects">
 					{fxOff ? '◍' : '◉'}
@@ -287,14 +309,14 @@
 			</div>
 		</header>
 
-		<div class="flex flex-1 min-h-0">
-			<nav class="flex w-[180px] flex-col border-r border-border bg-panel py-2">
+		<div class="flex flex-1 min-h-0 flex-col md:flex-row">
+			<nav class="flex w-full shrink-0 flex-row overflow-x-auto border-b border-border bg-panel py-1 md:w-[192px] md:flex-col md:overflow-visible md:border-b-0 md:border-r md:py-2" aria-label="Main navigation">
 				{#each nav as item}
 					<a href={item.href} class="rack-item {$page.url.pathname === item.href ? 'rack-item--active' : ''}">
 						<span class="text-amber-muted">▸</span>{item.label}
 					</a>
 				{/each}
-				<div class="mt-auto flex flex-col gap-1 px-3 pt-4">
+				<div class="mt-auto hidden flex-col gap-1 px-3 pt-4 md:flex">
 					<div class="flex items-center gap-2 text-[11px] text-amber-dim">
 						<span class="h-2 w-2 rounded-full" style="background: {$pipelineState.state === 'live' ? 'var(--color-live-glow)' : $pipelineState.state === 'error' ? 'var(--color-danger)' : 'var(--color-amber-muted)'}"></span>
 						<span>{stateLabel($pipelineState)}</span>
@@ -302,7 +324,7 @@
 					<button onclick={doLogout} class="btn btn--ghost justify-start px-0">Sign out</button>
 				</div>
 			</nav>
-			<main class="flex-1 overflow-y-auto p-6">
+			<main class="min-w-0 flex-1 overflow-y-auto p-3 md:p-6">
 				{@render children()}
 			</main>
 		</div>

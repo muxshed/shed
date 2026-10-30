@@ -180,9 +180,6 @@ async fn set_failover(state: &AppState, active: bool, fallback: Option<Uuid>, in
 /// Pre-start an image/video fallback so its relay has frames the instant we cut.
 /// A live-ingress fallback already has a relay when its encoder connects.
 async fn ensure_fallback_running(state: &Arc<AppState>, fallback: Uuid) {
-    if state.get_media_relay(&fallback).await.is_some() {
-        return;
-    }
     let row = sqlx::query_as::<_, (String,)>("SELECT kind FROM sources WHERE id = ?")
         .bind(fallback.to_string())
         .fetch_optional(&state.db)
@@ -193,13 +190,22 @@ async fn ensure_fallback_running(state: &Arc<AppState>, fallback: Uuid) {
         if let Ok(SourceKind::MediaFile { file_path, loop_mode, .. }) =
             serde_json::from_str::<SourceKind>(&kind_json)
         {
-            let _ = crate::media_player::start_media_playback(
-                state.clone(),
-                fallback,
-                &file_path,
-                &loop_mode,
-            )
-            .await;
+            // A media relay can remain present after its FFmpeg player exits.
+            // Checking for a relay alone leaves the standby screen frozen forever.
+            let alive = {
+                let mut players = state.media_players.write().await;
+                match players.get_mut(&fallback) {
+                    Some(child) => matches!(child.try_wait(), Ok(None)),
+                    None => false,
+                }
+            };
+            if !alive {
+                if let Err(error) = crate::media_player::start_media_playback(
+                    state.clone(), fallback, &file_path, &loop_mode,
+                ).await {
+                    tracing::warn!("failover: standby source {} failed to start: {}", fallback, error);
+                }
+            }
         }
     }
 }

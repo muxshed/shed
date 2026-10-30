@@ -44,8 +44,8 @@ fn is_sequence_header(data: &[u8]) -> bool {
 fn remap_tag(data: &[u8], first_ts: &mut Option<u32>, base_output: u32, output_ts: &mut u32) -> Bytes {
     if let Some(src_ts) = flv::read_tag_timestamp(data) {
         let base = first_ts.get_or_insert(src_ts);
-        let elapsed = src_ts.wrapping_sub(*base);
-        let new_ts = base_output.wrapping_add(elapsed);
+        let elapsed = src_ts.saturating_sub(*base);
+        let new_ts = base_output.saturating_add(elapsed).max(*output_ts);
         *output_ts = new_ts;
         flv::rewrite_tag_timestamp(data, new_ts)
     } else {

@@ -4,7 +4,7 @@ use muxshed_common::{MuxshedConfig, WsEvent};
 use muxshed_processor::StubPipelineController;
 use sqlx::sqlite::SqlitePoolOptions;
 use std::sync::Arc;
-use tokio::sync::{broadcast, watch, RwLock};
+use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use tracing_subscriber::EnvFilter;
 
 use muxshed_api::egress::EgressManager;
@@ -123,6 +123,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .map(|token| hash_key(&token));
 
+    let automatic_ad_config = muxshed_api::ad_scheduler::load_config(&db).await;
+    let automation_config = muxshed_api::broadcast_tools::load_config(&db).await;
+    muxshed_api::broadcast_tools::prepare_overlay(&automation_config);
+
     let state = Arc::new(AppState {
         pipeline,
         config: Arc::new(RwLock::new(config.clone())),
@@ -135,8 +139,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         sequence_headers: RwLock::new(std::collections::HashMap::new()),
         source_media_info: RwLock::new(std::collections::HashMap::new()),
         media_players: RwLock::new(std::collections::HashMap::new()),
+        ad_session: Mutex::new(None),
+        automatic_ads: Mutex::new(muxshed_api::ad_scheduler::AutomaticAdRuntime::new(automatic_ad_config)),
+        automation: Mutex::new(muxshed_api::broadcast_tools::AutomationRuntime::new(automation_config)),
         source_normalizers: RwLock::new(std::collections::HashMap::new()),
         srt_listeners: RwLock::new(std::collections::HashMap::new()),
+        rtsp_sources: RwLock::new(std::collections::HashMap::new()),
         guest_peers: RwLock::new(std::collections::HashMap::new()),
         whip_sessions: RwLock::new(std::collections::HashMap::new()),
         scene_compositors: RwLock::new(std::collections::HashMap::new()),
@@ -189,6 +197,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         });
                     }
+                } else if let muxshed_common::SourceKind::Rtsp { url } = kind {
+                    if let Ok(id) = id_str.parse::<uuid::Uuid>() {
+                        let s = state.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = muxshed_api::rtsp::start_rtsp_source(s, id, url).await {
+                                tracing::warn!("rtsp: source {} could not start: {}", id, e);
+                            }
+                        });
+                    }
                 } else if let muxshed_common::SourceKind::Browser { url } = kind {
                     if let Ok(id) = id_str.parse::<uuid::Uuid>() {
                         let s = state.clone();
@@ -217,6 +234,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scheduler_state = state.clone();
     tokio::spawn(async move {
         muxshed_api::scheduler::run_scheduler(scheduler_state).await;
+    });
+
+    // Conservative reliability supervisor: monitor only by default.
+    // Automatic FFmpeg restart requires an explicit opt-in in Settings.
+    let reliability_state = state.clone();
+    tokio::spawn(async move {
+        muxshed_api::reliability::run_watchdog(reliability_state).await;
+    });
+
+    let automatic_ads_state = state.clone();
+    tokio::spawn(async move {
+        muxshed_api::ad_scheduler::run_automatic_ads(automatic_ads_state).await;
+    });
+
+    // Opt-in weather, sponsor graphics, camera rotation, and in-app alerts.
+    let automation_state = state.clone();
+    tokio::spawn(async move {
+        muxshed_api::broadcast_tools::run(automation_state).await;
+    });
+
+    // Durable local history observer. Starts after migrations and AppState exist,
+    // never changes program routing or encoder processes.
+    let history_state = state.clone();
+    tokio::spawn(async move {
+        muxshed_api::history::run_history_monitor(history_state).await;
     });
 
     let rtmp_state = state.clone();

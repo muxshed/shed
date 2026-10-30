@@ -77,7 +77,9 @@
 		<span class="label shrink-0">
 			{source.kind.type === 'srt'
 				? 'SRT'
-				: source.kind.type === 'rtmp'
+				: source.kind.type === 'rtsp'
+			? 'RTSP'
+			: source.kind.type === 'rtmp'
 				? 'RTMP'
 				: source.kind.type === 'web_rtc'
 				? 'WHIP'
@@ -107,6 +109,11 @@
 				Delete
 			</button>
 		</div>
+    {:else if source.kind.type === 'rtsp'}
+        <div class="mt-2 text-xs text-amber-dim">Direct IP camera · reconnects automatically · camera URL hidden</div>
+        <div class="mt-2 flex gap-2">
+            <button onclick={remove} class="btn btn--danger">Delete</button>
+        </div>
 	{:else}
 		<div class="mt-2 flex gap-2">
 			<button onclick={remove} class="btn btn--danger">

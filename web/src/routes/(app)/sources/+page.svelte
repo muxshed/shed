@@ -8,9 +8,10 @@
 	import type { SourceKind } from '$lib/types';
 
 	let name = $state('');
-	let protocol = $state<'rtmp' | 'srt' | 'browser' | 'webrtc'>('rtmp');
+	let protocol = $state<'rtmp' | 'rtsp' | 'srt' | 'browser' | 'webrtc'>('rtmp');
 	let srtPassphrase = $state('');
 	let browserUrl = $state('');
+	let rtspUrl = $state('');
 	let creating = $state(false);
 
 	onMount(refresh);
@@ -30,6 +31,12 @@
 					port: 0,
 					passphrase: srtPassphrase.trim() || undefined,
 				};
+            } else if (protocol === 'rtsp') {
+                if (!/^rtsps?:\/\//i.test(rtspUrl.trim())) {
+                    notify.error('Enter the full rtsp:// camera URL');
+                    return;
+                }
+                kind = { type: 'rtsp', url: rtspUrl.trim() };
 			} else if (protocol === 'browser') {
 				if (!browserUrl.trim()) return;
 				kind = { type: 'browser', url: browserUrl.trim() };
@@ -42,6 +49,7 @@
 			name = '';
 			srtPassphrase = '';
 			browserUrl = '';
+			rtspUrl = '';
 			await refresh();
 			notify.success('Source added');
 		} catch (e) {
@@ -62,6 +70,7 @@
 						<label class="field-label" for="source-protocol">Protocol</label>
 						<select id="source-protocol" bind:value={protocol} class="select">
 							<option value="rtmp">RTMP</option>
+							<option value="rtsp">RTSP / IP Camera</option>
 							<option value="srt">SRT</option>
 							<option value="browser">Browser</option>
 							<option value="webrtc">WHIP (WebRTC)</option>
@@ -87,6 +96,19 @@
 							class="input"
 						/>
 					</div>
+				{:else if protocol === 'rtsp'}
+                    <div>
+                        <label class="field-label" for="source-rtsp-url">Camera RTSP URL (stored for auto-reconnect)</label>
+                        <input
+                            id="source-rtsp-url"
+                            type="password"
+                            autocomplete="off"
+                            bind:value={rtspUrl}
+                            placeholder="rtsp://camera-user:password@camera-ip:554/path"
+                            class="input w-full"
+                        />
+                        <p class="mt-1 text-xs text-amber-muted">Use H.264 camera output. Keep credentials private; Muxshed saves this URL to its local database.</p>
+                    </div>
 				{:else if protocol === 'browser'}
 					<div>
 						<label class="field-label" for="source-url">Page URL</label>

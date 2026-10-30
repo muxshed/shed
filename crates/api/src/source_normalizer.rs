@@ -1,4 +1,4 @@
-// Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
+// Licensed under the GNU Affero General Public License v3.0 â€” see LICENSE.
 
 //! Normalizes RTMP source input to a consistent output canvas resolution.
 //! Each source gets its own FFmpeg process: raw FLV in -> normalized FLV out.
@@ -45,12 +45,13 @@ pub async fn start_normalizer(
     let args = vec![
         "-hide_banner",
         "-loglevel", "warning",
+        "-fflags", "+genpts",
         "-f", "flv",
         "-i", "pipe:0",
         "-vf", &vf,
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-tune", "zerolatency",
+        "-c:v", "h264_nvenc",
+        "-preset", "p4",
+        "-tune", "ll",
         "-b:v", &bv,
         "-maxrate", &maxrate,
         "-bufsize", &bufsize,

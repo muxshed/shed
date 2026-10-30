@@ -16,6 +16,7 @@ pub struct Source {
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SourceKind {
+    Rtsp { url: String },
     Rtmp { stream_key: String },
     Srt { port: u16, passphrase: Option<String> },
     WebRtc { token: String },

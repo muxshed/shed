@@ -1,5 +1,10 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
+pub mod ads;
+pub mod ad_scheduler;
+pub mod reliability;
+pub mod history;
+pub mod broadcast_tools;
 pub mod auth;
 pub mod channel_hls;
 pub mod openapi;
@@ -17,6 +22,7 @@ pub mod error;
 pub mod program;
 pub mod routes;
 pub mod rtmp;
+pub mod rtsp;
 pub mod browser_source;
 pub mod scene_compositor;
 pub mod schedule_time;
