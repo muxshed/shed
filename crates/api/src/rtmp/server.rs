@@ -48,8 +48,6 @@ async fn handle_connection(
     state: Arc<AppState>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut handshake = Handshake::new(PeerType::Server);
-    let s0s1 = handshake.generate_outbound_p0_and_p1()?;
-    stream.write_all(&s0s1).await?;
 
     let mut buf = [0u8; 8192];
     let mut handshake_complete = false;
