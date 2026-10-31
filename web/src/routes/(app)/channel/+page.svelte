@@ -298,8 +298,8 @@
 
 				<div class="rounded-sm border border-border-dim bg-panel-raised p-3 text-xs text-amber-dim">
 					<p>
-						Video only plays while you are streaming. The public HLS output requires the
-						GStreamer / Docker build of Muxshed.
+						Video plays while the studio is on air. The public channel is generated as HLS
+						by Muxshed's ffmpeg media pipeline.
 					</p>
 				</div>
 			</div>

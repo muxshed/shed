@@ -7,17 +7,24 @@
 		sourceId,
 		label = '',
 		active = false,
+		/** Play preview audio on this browser's speakers (Program monitor toggle). */
+		monitorAudio = false,
 		onclick,
 	}: {
 		sourceId: string;
 		label?: string;
 		active?: boolean;
+		monitorAudio?: boolean;
 		onclick?: () => void;
 	} = $props();
 
 	let videoEl: HTMLVideoElement;
 	let player: mpegts.Player | null = null;
 	let destroyed = false;
+
+	$effect(() => {
+		if (videoEl) videoEl.muted = !monitorAudio;
+	});
 
 	function createPlayer() {
 		if (!mpegts.isSupported() || destroyed) return;

@@ -1,6 +1,6 @@
 // Licensed under the GNU Affero General Public License v3.0 — see LICENSE.
 
-use crate::rtmp::flv;
+use crate::rtmp::flv::{self, is_sequence_header, is_video_keyframe};
 use crate::state::AppState;
 use bytes::Bytes;
 use std::sync::Arc;
@@ -17,29 +17,6 @@ fn tag_type(data: &[u8]) -> Option<u8> {
     Some(data[0])
 }
 
-fn is_video_keyframe(data: &[u8]) -> bool {
-    if data.len() < 13 || data[0] != FLV_TAG_VIDEO {
-        return false;
-    }
-    let frame_type = data[11] & 0xF0;
-    let is_seq_header = data[12] == 0x00;
-    frame_type == 0x10 && !is_seq_header
-}
-
-fn is_sequence_header(data: &[u8]) -> bool {
-    if data.len() < 13 {
-        return false;
-    }
-    let tt = data[0];
-    if tt == FLV_TAG_VIDEO {
-        return data[12] == 0x00;
-    }
-    if tt == FLV_TAG_AUDIO && data.len() > 12 {
-        return data[12] == 0x00;
-    }
-    false
-}
-
 /// Remap a tag's timestamp relative to a base, outputting a continuous timestamp.
 fn remap_tag(data: &[u8], first_ts: &mut Option<u32>, base_output: u32, output_ts: &mut u32) -> Bytes {
     if let Some(src_ts) = flv::read_tag_timestamp(data) {
@@ -51,6 +28,49 @@ fn remap_tag(data: &[u8], first_ts: &mut Option<u32>, base_output: u32, output_t
     } else {
         Bytes::copy_from_slice(data)
     }
+}
+
+/// Resolve which source should provide programme audio for the given video source.
+///
+/// Independent routing wins when set. Otherwise audio follows video. A scene
+/// compositor only carries a silent track, so for a scene follow the first layer
+/// (by z_index) whose source has an AAC sequence header; if no layer has audio,
+/// keep the scene's own silent track so the programme FLV always has audio.
+pub async fn resolve_program_audio_source(
+    state: &AppState,
+    video_source_id: Uuid,
+    routing: &crate::state::AudioRouting,
+) -> Uuid {
+    if !routing.audio_follows_video {
+        if let Some(id) = routing.active_audio_source {
+            return id;
+        }
+    }
+
+    let layers = sqlx::query_as::<_, (String,)>(
+        "SELECT source_id FROM scene_layers WHERE scene_id = ? ORDER BY z_index ASC",
+    )
+    .bind(video_source_id.to_string())
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let headers = state.sequence_headers.read().await;
+    let layer_audio = layers
+        .iter()
+        .filter_map(|(id,)| Uuid::parse_str(id).ok())
+        .find(|id| headers.get(id).is_some_and(|h| h.audio.is_some()));
+
+    if let Some(id) = layer_audio {
+        tracing::debug!(
+            "program audio: scene {} follows layer source {}",
+            video_source_id,
+            id
+        );
+        return id;
+    }
+
+    video_source_id
 }
 
 /// Runs the program router: takes video from program_source, audio from audio routing.
@@ -73,11 +93,8 @@ pub async fn run_program_router(state: Arc<AppState>) {
         };
 
         let audio_routing = audio_routing_rx.borrow_and_update().clone();
-        let audio_source_id = if audio_routing.audio_follows_video || audio_routing.active_audio_source.is_none() {
-            current_source_id
-        } else {
-            audio_routing.active_audio_source.unwrap_or(current_source_id)
-        };
+        let audio_source_id =
+            resolve_program_audio_source(&state, current_source_id, &audio_routing).await;
 
         let same_source = current_source_id == audio_source_id;
 
@@ -171,11 +188,12 @@ pub async fn run_program_router(state: Arc<AppState>) {
                                     ps.got_keyframe = true;
                                     // Send sequence headers for new source
                                     let new_audio_routing = audio_routing_rx.borrow().clone();
-                                    let new_audio_id = if new_audio_routing.audio_follows_video || new_audio_routing.active_audio_source.is_none() {
-                                        ps.source_id
-                                    } else {
-                                        new_audio_routing.active_audio_source.unwrap_or(ps.source_id)
-                                    };
+                                    let new_audio_id = resolve_program_audio_source(
+                                        &state,
+                                        ps.source_id,
+                                        &new_audio_routing,
+                                    )
+                                    .await;
                                     send_sequence_headers(&state, &ps.source_id, &new_audio_id, output_ts).await;
                                     // Forward the keyframe
                                     let remapped = remap_tag(&data, &mut Some(flv::read_tag_timestamp(&data).unwrap_or(0)), output_ts, &mut output_ts);

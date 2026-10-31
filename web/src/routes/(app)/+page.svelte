@@ -50,6 +50,9 @@
 		audio_follows_video: true,
 	});
 
+	/** Local Program-monitor speaker (browser only — does not change AudioRouting). */
+	let programMonitorAudio = $state(false);
+
 	// Output
 	let outputConfig = $state<OutputConfig>({
 		video_bitrate_kbps: 4500,
@@ -398,15 +401,33 @@
 						▮ PROGRAM
 						<PopoutButton section="program" width={960} height={600} />
 					</span>
-					{#if programSourceId}
-						{@const progSrc = $sources.find((s) => s.id === programSourceId)}
-						<span class="text-amber-dim normal-case tracking-normal">{progSrc?.name || ''}</span>
-					{/if}
+					<div class="flex items-center gap-2">
+						{#if programSourceId}
+							{@const progSrc = $sources.find((s) => s.id === programSourceId)}
+							<span class="text-amber-dim normal-case tracking-normal">{progSrc?.name || ''}</span>
+						{/if}
+						<button
+							type="button"
+							class="btn {programMonitorAudio ? 'btn--go' : ''}"
+							style="min-height:24px;padding:2px 8px"
+							title="Local speaker monitor only — use headphones to avoid feedback. Does not change broadcast audio."
+							onclick={() => (programMonitorAudio = !programMonitorAudio)}
+						>
+							{programMonitorAudio ? '▮ Monitor Audio' : '▯ Monitor Audio'}
+						</button>
+					</div>
 				</header>
 				{#if programSourceId}
 					{#key programSourceId}
-						<VideoPreview sourceId={programSourceId} active={true} />
+						<VideoPreview
+							sourceId={programSourceId}
+							active={true}
+							monitorAudio={programMonitorAudio}
+						/>
 					{/key}
+					<p class="border-t border-border-dim px-3 py-1 text-[11px] text-amber-muted">
+						Monitor Audio is local to this browser only. Prefer headphones to avoid acoustic feedback.
+					</p>
 				{:else}
 					<div class="scanlines-well flex aspect-video items-center justify-center border-t border-border">
 						<span class="text-amber-muted">No source on live</span>

@@ -198,10 +198,35 @@ pub async fn ensure_channel_hls(state: &Arc<AppState>) {
             let data_dir = state.config.read().await.data_dir.clone();
             let output_config = load_output_config(state).await;
             let program_source = *state.program_source.borrow();
+            let audio_routing = state.audio_routing.borrow().clone();
+
             let seq_headers = match program_source {
-                Some(id) => state.sequence_headers.read().await.get(&id).cloned(),
+                Some(video_id) => {
+                    let audio_id = crate::program::resolve_program_audio_source(
+                        state,
+                        video_id,
+                        &audio_routing,
+                    )
+                    .await;
+                    tracing::debug!(
+                        "channel HLS: effective program source {} (audio {})",
+                        video_id,
+                        audio_id
+                    );
+                    let headers = state.sequence_headers.read().await;
+                    let video_h = headers.get(&video_id);
+                    let audio_h = headers.get(&audio_id);
+                    Some(crate::state::SequenceHeaders {
+                        video: video_h.and_then(|h| h.video.clone()),
+                        audio: audio_h
+                            .and_then(|h| h.audio.clone())
+                            .or_else(|| video_h.and_then(|h| h.audio.clone())),
+                        last_keyframe: video_h.and_then(|h| h.last_keyframe.clone()),
+                    })
+                }
                 None => None,
             };
+
             if let Err(e) = state
                 .channel_hls
                 .start(

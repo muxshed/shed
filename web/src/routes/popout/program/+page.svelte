@@ -4,6 +4,7 @@
 	import VideoPreview from '../../../components/VideoPreview.svelte';
 
 	let sourceId = $state<string | null>(null);
+	let monitorAudio = $state(false);
 	let channel: BroadcastChannel;
 
 	onMount(() => {
@@ -22,11 +23,25 @@
 <svelte:head><title>Program - Muxshed</title></svelte:head>
 
 <section class="panel flex h-[calc(100vh-24px)] flex-col">
-	<header class="panel__head"><span class="text-danger-glow">▮ PROGRAM</span></header>
+	<header class="panel__head">
+		<span class="text-danger-glow">▮ PROGRAM</span>
+		<button
+			type="button"
+			class="btn {monitorAudio ? 'btn--go' : ''}"
+			style="min-height:24px;padding:2px 8px"
+			title="Local speaker monitor only — use headphones. Does not change broadcast audio."
+			onclick={() => (monitorAudio = !monitorAudio)}
+		>
+			{monitorAudio ? '▮ Monitor Audio' : '▯ Monitor Audio'}
+		</button>
+	</header>
 	{#if sourceId}
 		{#key sourceId}
-			<div class="flex-1"><VideoPreview {sourceId} active={true} /></div>
+			<div class="flex-1"><VideoPreview {sourceId} active={true} {monitorAudio} /></div>
 		{/key}
+		<p class="border-t border-border-dim px-3 py-1 text-[11px] text-amber-muted">
+			Monitor Audio is local to this browser only. Prefer headphones to avoid acoustic feedback.
+		</p>
 	{:else}
 		<div class="scanlines-well flex flex-1 items-center justify-center border-t border-border">
 			<span class="text-amber-muted">Waiting for program source…</span>

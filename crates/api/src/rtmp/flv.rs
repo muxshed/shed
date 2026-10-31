@@ -45,6 +45,25 @@ pub fn rewrite_tag_timestamp(tag: &[u8], new_ts: u32) -> Bytes {
     buf.freeze()
 }
 
+/// AVC keyframe (IDR) video tag, excluding sequence headers.
+pub fn is_video_keyframe(tag: &[u8]) -> bool {
+    if tag.len() < 13 || tag[0] != FLV_TAG_VIDEO {
+        return false;
+    }
+    let frame_type = tag[11] & 0xF0;
+    frame_type == 0x10 && tag[12] != 0x00
+}
+
+/// AVC sequence header (decoder configuration) video tag.
+pub fn is_video_sequence_header(tag: &[u8]) -> bool {
+    tag.len() >= 13 && tag[0] == FLV_TAG_VIDEO && tag[12] == 0x00
+}
+
+/// AVC or AAC sequence header tag.
+pub fn is_sequence_header(tag: &[u8]) -> bool {
+    tag.len() >= 13 && (tag[0] == FLV_TAG_VIDEO || tag[0] == FLV_TAG_AUDIO) && tag[12] == 0x00
+}
+
 fn flv_tag(tag_type: u8, data: &[u8], timestamp_ms: u32) -> Bytes {
     let data_size = data.len() as u32;
     let total_tag_size = 11 + data_size;
@@ -73,4 +92,32 @@ fn flv_tag(tag_type: u8, data: &[u8], timestamp_ms: u32) -> Bytes {
     buf.put_u32(total_tag_size);
 
     buf.freeze()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tag(tag_type: u8, byte11: u8, byte12: u8) -> Vec<u8> {
+        let mut buf = vec![0u8; 16];
+        buf[0] = tag_type;
+        buf[11] = byte11;
+        buf[12] = byte12;
+        buf
+    }
+
+    #[test]
+    fn classifies_keyframes_and_sequence_headers() {
+        assert!(is_video_keyframe(&tag(FLV_TAG_VIDEO, 0x17, 0x01)));
+        assert!(!is_video_keyframe(&tag(FLV_TAG_VIDEO, 0x17, 0x00))); // AVC seq header
+        assert!(!is_video_keyframe(&tag(FLV_TAG_VIDEO, 0x27, 0x01))); // inter frame
+        assert!(!is_video_keyframe(&tag(FLV_TAG_AUDIO, 0x1F, 0x01)));
+
+        assert!(is_video_sequence_header(&tag(FLV_TAG_VIDEO, 0x17, 0x00)));
+        assert!(!is_video_sequence_header(&tag(FLV_TAG_AUDIO, 0xAF, 0x00)));
+
+        assert!(is_sequence_header(&tag(FLV_TAG_VIDEO, 0x17, 0x00)));
+        assert!(is_sequence_header(&tag(FLV_TAG_AUDIO, 0xAF, 0x00)));
+        assert!(!is_sequence_header(&tag(FLV_TAG_AUDIO, 0xAF, 0x01)));
+    }
 }

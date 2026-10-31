@@ -175,7 +175,9 @@ pub async fn start_scene_compositor(state: Arc<AppState>, scene_id: Uuid) -> Res
         args.push("-i".into());
         args.push(format!("tcp://127.0.0.1:{}", p));
     }
-    // Silent audio so the FLV is well-formed; program audio is muxed separately.
+    // Silent audio so the FLV always has an audio track. With Audio Follows Video
+    // the program router swaps in the first layer that has audio (see
+    // program::resolve_program_audio_source) and only falls back to this silence.
     args.push("-f".into());
     args.push("lavfi".into());
     args.push("-i".into());
