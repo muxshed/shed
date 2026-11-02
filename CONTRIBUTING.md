@@ -34,7 +34,7 @@ cd web && npm run build
 
 - Keep PRs focused on a single change
 - Include a description of what and why
-- Reference any related issues
+- Link an issue in the PR body (`Fixes #123`). Every PR needs one; open an issue first if none exists. CI checks this.
 
 ## License
 

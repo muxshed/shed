@@ -45,4 +45,6 @@ What does this PR do and why?
 
 ## Related issues
 
-<!-- Link any related issues: Fixes #123, Relates to #456 -->
+<!-- Required. Every PR needs an issue; open one first if none exists. CI fails without it. -->
+
+Fixes #
