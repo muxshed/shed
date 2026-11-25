@@ -108,7 +108,7 @@ re-encoded); the public watch page is the one transcoded output (`channel_hls.rs
 ### Source (local development)
 
 - Rust 1.88+ and Cargo
-- Node.js 20+ and npm
+- Node.js 22.17+ and npm
 - **ffmpeg** for RTMP ingest/fan-out, recording, and the public watch page (HLS)
 
 ### Docker / Podman

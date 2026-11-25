@@ -1,11 +1,11 @@
 <!-- Licensed under the GNU Affero General Public License v3.0 — see LICENSE. -->
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import Hls from 'hls.js';
 	import type { ChannelInfo } from '$lib/types';
 
-	const token = $derived($page.params.token);
+	const token = $derived(page.params.token);
 
 	let info = $state<ChannelInfo | null>(null);
 	let loadError = $state<string | null>(null);

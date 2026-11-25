@@ -2,7 +2,7 @@
 <script lang="ts">
 	import '../../app.css';
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { connectWs, disconnectWs } from '$lib/ws';
 	import { hasSession, setSessionToken, clearSession, setApiKey, api } from '$lib/api';
 	import { pipelineState } from '$lib/stores/pipeline';
@@ -152,8 +152,8 @@
 	];
 
 	const crumb = $derived(
-		nav.find((n) => n.href === $page.url.pathname)?.label ??
-			($page.url.pathname.slice(1).split('/')[0] || 'Studio'),
+		nav.find((n) => n.href === page.url.pathname)?.label ??
+			(page.url.pathname.slice(1).split('/')[0] || 'Studio'),
 	);
 
 	function stateLabel(state: typeof $pipelineState): string {
@@ -290,7 +290,7 @@
 		<div class="flex flex-1 min-h-0">
 			<nav class="flex w-[180px] flex-col border-r border-border bg-panel py-2">
 				{#each nav as item}
-					<a href={item.href} class="rack-item {$page.url.pathname === item.href ? 'rack-item--active' : ''}">
+					<a href={item.href} class="rack-item {page.url.pathname === item.href ? 'rack-item--active' : ''}">
 						<span class="text-amber-muted">▸</span>{item.label}
 					</a>
 				{/each}
