@@ -345,6 +345,7 @@ pub async fn public_info(
         .ok_or_else(|| MuxshedError::NotFound("channel".to_string()))?;
 
     let live = hls_live(&state, &row.token).await;
+    let stalled = !live && state.channel_hls.is_running().await;
 
     Ok(Json(ChannelInfo {
         title: row.title.clone(),
@@ -354,6 +355,7 @@ pub async fn public_info(
             .map(|_| format!("/api/v1/public/channel/{}/logo", row.token)),
         accent: row.accent.clone(),
         live,
+        stalled,
         requires_password: row.password_hash.is_some(),
     }))
 }

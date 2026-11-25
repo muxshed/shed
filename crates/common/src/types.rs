@@ -310,6 +310,9 @@ pub struct ChannelInfo {
     pub logo_url: Option<String>,
     pub accent: Option<String>,
     pub live: bool,
+    /// On air in the studio, but the public output is not producing segments.
+    #[serde(default)]
+    pub stalled: bool,
     pub requires_password: bool,
 }
 
@@ -488,6 +491,7 @@ mod tests {
             logo_url: Some("/logo".into()),
             accent: None,
             live: true,
+            stalled: false,
             requires_password: true,
         });
     }
