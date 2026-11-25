@@ -6,7 +6,7 @@ One stream in, or many. Every destination, simultaneously. No cloud middleman, n
 
 The open source, self-hosted alternative to Restream, StreamYard, and vMix.
 
-**[Join the community on Discord →](https://discord.gg/CZYjFu6vu)**
+**[Join the community on Discord →](https://discord.gg/HUKr8r7TC5)**
 
 <img src=".github/images/studio_screenshot.png" alt="Muxshed Studio" width="400" />
 
