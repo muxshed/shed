@@ -2,6 +2,7 @@
 <script lang="ts">
 	import type { Source } from '$lib/types';
 	import { api } from '$lib/api';
+	import { copyLocalText } from '$lib/localClipboard';
 
 	let { source, ondelete }: { source: Source; ondelete: () => void } = $props();
 	let copied = $state(false);
@@ -45,9 +46,11 @@
 	}
 
 	async function copyUrl() {
-		await navigator.clipboard.writeText(connectionUrl());
-		copied = true;
-		setTimeout(() => (copied = false), 2000);
+		const result = await copyLocalText(connectionUrl());
+		if (result === 'copied') {
+			copied = true;
+			setTimeout(() => (copied = false), 2000);
+		}
 	}
 
 	function bearerToken(): string {
@@ -56,9 +59,11 @@
 
 	let copiedToken = $state(false);
 	async function copyToken() {
-		await navigator.clipboard.writeText(bearerToken());
-		copiedToken = true;
-		setTimeout(() => (copiedToken = false), 2000);
+		const result = await copyLocalText(bearerToken());
+		if (result === 'copied') {
+			copiedToken = true;
+			setTimeout(() => (copiedToken = false), 2000);
+		}
 	}
 
 	async function remove() {
