@@ -13,7 +13,7 @@ use tokio::sync::{broadcast, Mutex};
 use crate::routes::output::OutputConfig;
 use crate::rtmp::flv::{self, is_sequence_header, is_video_keyframe, is_video_sequence_header};
 use crate::state::{AppState, SequenceHeaders};
-use muxshed_common::WsEvent;
+use muxshed_common::{PipelineState, WsEvent};
 
 /// No playlist write for this long while running counts as a stalled output.
 const STALL_AFTER: Duration = Duration::from_secs(20);
@@ -77,6 +77,14 @@ impl ChannelHls {
             tracing::info!("stopping channel HLS");
             let _ = running.child.kill().await;
         }
+    }
+
+    /// Whether a not-live watch page should show "Reconnecting". A just-started
+    /// encoder doesn't count, unless it is a restart after a stall.
+    pub async fn output_stalled(&self) -> bool {
+        self.process.lock().await.as_ref().is_some_and(|r| {
+            r.started.elapsed() >= self.stall_after || self.stalled.load(Ordering::Relaxed)
+        })
     }
 
     /// None when not running. An exited ffmpeg is reaped and cleared.
@@ -260,7 +268,19 @@ pub async fn run_channel_hls_watchdog(state: Arc<AppState>) {
 
         match state.channel_hls.health().await {
             None => {
-                state.channel_hls.set_stalled(false);
+                // A failed restart leaves nothing running; keep retrying while on air.
+                if state.channel_hls.stalled.load(Ordering::Relaxed) {
+                    crate::routes::stream::ensure_channel_hls(&state).await;
+                    if !state.channel_hls.is_running().await {
+                        let on_air = !matches!(
+                            state.pipeline.state().await,
+                            PipelineState::Idle | PipelineState::Stopping
+                        );
+                        if !on_air {
+                            state.channel_hls.set_stalled(false);
+                        }
+                    }
+                }
             }
             Some(Health::Starting) => {}
             Some(Health::Healthy) => {

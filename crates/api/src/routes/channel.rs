@@ -345,7 +345,7 @@ pub async fn public_info(
         .ok_or_else(|| MuxshedError::NotFound("channel".to_string()))?;
 
     let live = hls_live(&state, &row.token).await;
-    let stalled = !live && state.channel_hls.is_running().await;
+    let stalled = !live && state.channel_hls.output_stalled().await;
 
     Ok(Json(ChannelInfo {
         title: row.title.clone(),
