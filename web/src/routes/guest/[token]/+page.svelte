@@ -1,12 +1,12 @@
 <!-- Licensed under the GNU Affero General Public License v3.0 — see LICENSE. -->
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { createMicMeter, type MicMeterHandle } from '$lib/audio/mic-meter';
 	import type { EffectsMode } from '$lib/video-effects/background-processor';
 	import type { MediapipeBlurProcessor } from '$lib/video-effects/mediapipe-segmenter';
 
-	const token = $derived($page.params.token);
+	const token = $derived(page.params.token);
 
 	type Mode = 'loading' | 'invalid' | 'ready' | 'joining' | 'live' | 'pending' | 'error';
 	let mode = $state<Mode>('loading');
