@@ -2,16 +2,24 @@
 
 use bytes::Bytes;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, Mutex};
 
 use crate::routes::output::OutputConfig;
 use crate::rtmp::flv::{self, is_sequence_header, is_video_keyframe, is_video_sequence_header};
-use crate::state::SequenceHeaders;
+use crate::state::{AppState, SequenceHeaders};
+use muxshed_common::{PipelineState, WsEvent};
+
+/// No playlist write for this long while running counts as a stalled output.
+const STALL_AFTER: Duration = Duration::from_secs(20);
+/// Program packets seen within this window mean the bus is producing.
+const INPUT_RECENT: Duration = Duration::from_secs(5);
+const WATCHDOG_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Produces a public HLS rendition of the program output for the Channel watch page.
 ///
@@ -20,13 +28,38 @@ use crate::state::SequenceHeaders;
 /// ffmpeg over stdin, exactly like [`crate::egress::EgressManager`], and segmented to
 /// `{data_dir}/hls/{token}/index.m3u8` for the public watch page to play.
 pub struct ChannelHls {
-    process: Arc<Mutex<Option<Child>>>,
+    process: Arc<Mutex<Option<Running>>>,
+    stalled: AtomicBool,
+    stall_after: Duration,
+    /// Unix millis of the last program packet received from the bus.
+    last_input_ms: Arc<AtomicU64>,
+}
+
+struct Running {
+    child: Child,
+    playlist: PathBuf,
+    started: Instant,
+}
+
+pub enum Health {
+    /// ffmpeg is up but has not written its first playlist yet.
+    Starting,
+    Healthy,
+    /// No playlist update within [`STALL_AFTER`]. `input` is true when the program
+    /// bus is still producing, i.e. ffmpeg itself is wedged.
+    Stalled {
+        input: bool,
+    },
+    Exited(ExitStatus),
 }
 
 impl ChannelHls {
     pub fn new() -> Self {
         Self {
             process: Arc::new(Mutex::new(None)),
+            stalled: AtomicBool::new(false),
+            stall_after: STALL_AFTER,
+            last_input_ms: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -34,11 +67,49 @@ impl ChannelHls {
         self.process.lock().await.is_some()
     }
 
+    /// Returns true if the value changed.
+    fn set_stalled(&self, stalled: bool) -> bool {
+        self.stalled.swap(stalled, Ordering::Relaxed) != stalled
+    }
+
     pub async fn stop(&self) {
-        if let Some(mut child) = self.process.lock().await.take() {
+        if let Some(mut running) = self.process.lock().await.take() {
             tracing::info!("stopping channel HLS");
-            let _ = child.kill().await;
+            let _ = running.child.kill().await;
         }
+    }
+
+    /// Whether a not-live watch page should show "Reconnecting". A just-started
+    /// encoder doesn't count, unless it is a restart after a stall.
+    pub async fn output_stalled(&self) -> bool {
+        self.process.lock().await.as_ref().is_some_and(|r| {
+            r.started.elapsed() >= self.stall_after || self.stalled.load(Ordering::Relaxed)
+        })
+    }
+
+    /// None when not running. An exited ffmpeg is reaped and cleared.
+    pub async fn health(&self) -> Option<Health> {
+        let mut guard = self.process.lock().await;
+        let running = guard.as_mut()?;
+
+        if let Ok(Some(status)) = running.child.try_wait() {
+            guard.take();
+            return Some(Health::Exited(status));
+        }
+
+        let written = std::fs::metadata(&running.playlist)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok());
+
+        match written {
+            Some(age) if age < self.stall_after => return Some(Health::Healthy),
+            None if running.started.elapsed() < self.stall_after => return Some(Health::Starting),
+            _ => {}
+        }
+        let last = self.last_input_ms.load(Ordering::Relaxed);
+        let input = last > 0 && now_ms().saturating_sub(last) < INPUT_RECENT.as_millis() as u64;
+        Some(Health::Stalled { input })
     }
 
     pub async fn start(
@@ -166,12 +237,88 @@ impl ChannelHls {
         }
 
         let mut rx = media_tx.subscribe();
+        let last_input_ms = self.last_input_ms.clone();
+        last_input_ms.store(0, Ordering::Relaxed);
         tokio::spawn(async move {
-            bootstrap_stdin(stdin, &mut rx, sequence_headers).await;
+            bootstrap_stdin(stdin, &mut rx, sequence_headers, &last_input_ms).await;
         });
 
-        *self.process.lock().await = Some(child);
+        *self.process.lock().await = Some(Running {
+            child,
+            playlist,
+            started: Instant::now(),
+        });
         Ok(())
+    }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Watches the channel HLS output while it runs. Restarts ffmpeg if it exits or
+/// stops segmenting while program media is still arriving, and tells the operator
+/// when the public output stalls (e.g. the program bus went silent) or recovers.
+pub async fn run_channel_hls_watchdog(state: Arc<AppState>) {
+    loop {
+        tokio::time::sleep(WATCHDOG_INTERVAL).await;
+
+        match state.channel_hls.health().await {
+            None => {
+                // A failed restart leaves nothing running; keep retrying while on air.
+                if state.channel_hls.stalled.load(Ordering::Relaxed) {
+                    crate::routes::stream::ensure_channel_hls(&state).await;
+                    if !state.channel_hls.is_running().await {
+                        let on_air = !matches!(
+                            state.pipeline.state().await,
+                            PipelineState::Idle | PipelineState::Stopping
+                        );
+                        if !on_air {
+                            state.channel_hls.set_stalled(false);
+                        }
+                    }
+                }
+            }
+            Some(Health::Starting) => {}
+            Some(Health::Healthy) => {
+                if state.channel_hls.set_stalled(false) {
+                    tracing::info!("channel HLS output recovered");
+                    let _ = state.ws_tx.send(WsEvent::ChannelOutput { stalled: false });
+                }
+            }
+            Some(Health::Exited(status)) => {
+                tracing::warn!("channel HLS ffmpeg exited ({}); restarting", status);
+                notify_stalled(&state);
+                crate::routes::stream::ensure_channel_hls(&state).await;
+            }
+            Some(Health::Stalled { input: true }) => {
+                // Either ffmpeg is wedged, or media resumed after a silent bus. A fresh
+                // encoder avoids ffmpeg padding the whole gap with duplicated frames.
+                tracing::warn!(
+                    "channel HLS not segmenting while program media is arriving; restarting"
+                );
+                notify_stalled(&state);
+                crate::routes::stream::ensure_channel_hls(&state).await;
+            }
+            Some(Health::Stalled { input: false }) => {
+                if state.channel_hls.set_stalled(true) {
+                    tracing::warn!(
+                        "channel HLS stalled: no program media for {}s",
+                        STALL_AFTER.as_secs()
+                    );
+                    let _ = state.ws_tx.send(WsEvent::ChannelOutput { stalled: true });
+                }
+            }
+        }
+    }
+}
+
+fn notify_stalled(state: &AppState) {
+    if state.channel_hls.set_stalled(true) {
+        let _ = state.ws_tx.send(WsEvent::ChannelOutput { stalled: true });
     }
 }
 
@@ -202,6 +349,7 @@ async fn bootstrap_stdin(
     mut stdin: tokio::process::ChildStdin,
     rx: &mut broadcast::Receiver<Bytes>,
     sequence_headers: Option<SequenceHeaders>,
+    last_input_ms: &AtomicU64,
 ) {
     let started = Instant::now();
 
@@ -231,6 +379,7 @@ async fn bootstrap_stdin(
     loop {
         match rx.recv().await {
             Ok(data) => {
+                last_input_ms.store(now_ms(), Ordering::Relaxed);
                 if waiting_for_keyframe {
                     // Always accept mid-stream codec config (source switches).
                     if is_sequence_header(&data) {
@@ -285,5 +434,69 @@ async fn bootstrap_stdin(
 impl Default for ChannelHls {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn has_ffmpeg() -> bool {
+        std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .is_ok()
+    }
+
+    #[tokio::test]
+    async fn health_reports_stall_without_program_media() {
+        if !has_ffmpeg() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("muxshed-hls-{}", uuid::Uuid::new_v4()));
+        let hls = ChannelHls {
+            stall_after: Duration::from_millis(500),
+            ..ChannelHls::new()
+        };
+        let (tx, _) = broadcast::channel::<Bytes>(16);
+
+        assert!(hls.health().await.is_none());
+        hls.start("t", &dir, tx.clone(), None, None).await.unwrap();
+        assert!(matches!(hls.health().await, Some(Health::Starting)));
+
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        assert!(matches!(
+            hls.health().await,
+            Some(Health::Stalled { input: false })
+        ));
+
+        hls.stop().await;
+        assert!(hls.health().await.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn health_reaps_exited_ffmpeg() {
+        if !has_ffmpeg() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("muxshed-hls-{}", uuid::Uuid::new_v4()));
+        let hls = ChannelHls::new();
+        let (tx, _) = broadcast::channel::<Bytes>(16);
+        hls.start("t", &dir, tx.clone(), None, None).await.unwrap();
+
+        // Closing the program bus closes ffmpeg's stdin, so it exits.
+        drop(tx);
+        let mut exited = false;
+        for _ in 0..50 {
+            if matches!(hls.health().await, Some(Health::Exited(_))) {
+                exited = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert!(exited);
+        assert!(!hls.is_running().await);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

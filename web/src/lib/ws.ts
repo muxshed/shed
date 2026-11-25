@@ -95,6 +95,13 @@ function handleEvent(event: WsEvent) {
 				intent_source_id: event.payload.intent_source_id,
 			});
 			break;
+		case 'channel_output':
+			if (event.payload.stalled) {
+				notify.warning('Channel output stalled: no program media is reaching the watch page');
+			} else {
+				notify.success('Channel output recovered');
+			}
+			break;
 		case 'schedule_started':
 			activeSchedule.set({ id: event.payload.id });
 			break;

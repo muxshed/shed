@@ -42,6 +42,8 @@ pub enum WsEvent {
         /// The operator-selected source the failover is standing in for.
         intent_source_id: Option<Uuid>,
     },
+    /// Public channel output stopped producing segments, or recovered.
+    ChannelOutput { stalled: bool },
     ScheduleStarted { id: Uuid },
     ScheduleEnded { id: Uuid },
     ScheduleSkipped { id: Uuid, reason: String },

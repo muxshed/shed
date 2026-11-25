@@ -280,6 +280,8 @@
 				{/if}
 				{#if info.live}
 					<span class="pill pill--live">● ON AIR</span>
+				{:else if info.stalled}
+					<span class="pill pill--warning">◌ RECONNECTING</span>
 				{:else}
 					<span class="pill pill--idle">○ OFFLINE</span>
 				{/if}
@@ -316,8 +318,13 @@
 				{:else if streamOffline}
 					<!-- Offline empty state -->
 					<div class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
-						<p class="text-lg tracking-widest text-amber-muted">○ STREAM OFFLINE</p>
-						<p class="text-xs text-amber-dim">Waiting for the broadcast to start…</p>
+						{#if info.stalled}
+							<p class="text-lg tracking-widest text-amber-muted">◌ SIGNAL INTERRUPTED</p>
+							<p class="text-xs text-amber-dim">The broadcast is still on. Reconnecting…</p>
+						{:else}
+							<p class="text-lg tracking-widest text-amber-muted">○ STREAM OFFLINE</p>
+							<p class="text-xs text-amber-dim">Waiting for the broadcast to start…</p>
+						{/if}
 					</div>
 				{/if}
 

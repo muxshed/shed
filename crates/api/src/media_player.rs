@@ -131,6 +131,7 @@ pub async fn start_media_playback(
         });
     }
 
+    let pid = child.id();
     {
         let mut players = state.media_players.write().await;
         if let Some(mut old) = players.remove(&source_id) {
@@ -141,7 +142,7 @@ pub async fn start_media_playback(
 
     let state_clone = state.clone();
     tokio::spawn(async move {
-        feed_relay(source_id, stdout, relay_tx, state_clone).await;
+        feed_relay(source_id, pid, stdout, relay_tx, state_clone).await;
     });
 
     Ok(())
@@ -222,18 +223,20 @@ pub async fn start_concat_playback(
             }
         });
     }
+    let pid = child.id();
     {
         let mut players = state.media_players.write().await;
         if let Some(mut old) = players.remove(&source_id) { let _ = old.kill().await; }
         players.insert(source_id, child);
     }
     let sc = state.clone();
-    tokio::spawn(async move { feed_relay(source_id, stdout, relay_tx, sc).await; });
+    tokio::spawn(async move { feed_relay(source_id, pid, stdout, relay_tx, sc).await; });
     Ok(())
 }
 
 async fn feed_relay(
     source_id: Uuid,
+    pid: Option<u32>,
     mut stdout: tokio::process::ChildStdout,
     relay_tx: broadcast::Sender<Bytes>,
     state: Arc<AppState>,
@@ -313,9 +316,17 @@ async fn feed_relay(
         }
     }
 
-    {
+    // Reap the finished ffmpeg so it doesn't linger as a zombie. Leave the entry
+    // alone if playback was restarted and it now holds a newer process.
+    let child = {
         let mut players = state.media_players.write().await;
-        players.remove(&source_id);
+        match players.get(&source_id) {
+            Some(c) if c.id() == pid => players.remove(&source_id),
+            _ => None,
+        }
+    };
+    if let Some(mut child) = child {
+        let _ = child.wait().await;
     }
 }
 
