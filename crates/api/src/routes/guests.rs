@@ -238,7 +238,7 @@ pub async fn whip(
 }
 
 fn generate_token() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     let mut rng = rand::rng();
     (0..32)
         .map(|_| {
