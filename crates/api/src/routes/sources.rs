@@ -355,7 +355,7 @@ fn ensure_stream_key(kind: SourceKind) -> SourceKind {
 }
 
 fn generate_stream_key() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     let mut rng = rand::rng();
     (0..20)
         .map(|_| {

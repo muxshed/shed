@@ -141,7 +141,7 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
 }
 
 pub fn generate_session_token() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     let mut rng = rand::rng();
     (0..48)
         .map(|_| {
@@ -156,7 +156,7 @@ pub fn generate_session_token() -> String {
 }
 
 pub fn generate_api_key() -> String {
-    use rand::Rng;
+    use rand::RngExt;
     let mut rng = rand::rng();
     let chars: String = (0..32)
         .map(|_| {
