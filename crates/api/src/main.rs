@@ -214,6 +214,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         muxshed_api::failover::run_failover_supervisor(failover_state).await;
     });
 
+    let channel_state = state.clone();
+    tokio::spawn(async move {
+        muxshed_api::channel_hls::run_channel_hls_watchdog(channel_state).await;
+    });
+
     let scheduler_state = state.clone();
     tokio::spawn(async move {
         muxshed_api::scheduler::run_scheduler(scheduler_state).await;

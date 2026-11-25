@@ -237,6 +237,7 @@ export interface ChannelInfo {
 	logo_url: string | null;
 	accent: string | null;
 	live: boolean;
+	stalled: boolean;
 	requires_password: boolean;
 }
 
@@ -252,6 +253,7 @@ export type WsEvent =
 			type: 'failover_state';
 			payload: { active: boolean; fallback_source_id: string | null; intent_source_id: string | null };
 	  }
+	| { type: 'channel_output'; payload: { stalled: boolean } }
 	| { type: 'schedule_started'; payload: { id: string } }
 	| { type: 'schedule_ended'; payload: { id: string } }
 	| { type: 'schedule_skipped'; payload: { id: string; reason: string } }
